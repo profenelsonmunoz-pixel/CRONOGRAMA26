@@ -494,9 +494,10 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-slate-100">
       <header className="bg-white border-b-2 border-[#1e3a8a] shadow-lg py-6 px-4 no-print">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-6">
-            <div className="w-20 h-20 bg-white p-1 rounded-2xl shadow-inner border border-blue-50 flex items-center justify-center overflow-hidden">
-              <img src="https://api.placeholder.com/150/150?text=IENSECAN" alt="Logo" className="max-h-full" />
+          <div className="flex items-center gap-10">
+            {/* LOGO MÁS GRANDE E IMAGEN OFICIAL */}
+            <div className="w-36 h-36 bg-white p-2 rounded-3xl shadow-inner border border-blue-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+              <img src="https://iensecan.edu.co/wp-content/uploads/2024/08/ESCUDO-IENSECAN-2020-2.png" alt="Escudo IENSECAN" className="max-w-full max-h-full object-contain" />
             </div>
             <div>
               <h1 className="text-xl md:text-3xl font-black text-[#1e3a8a] tracking-tight uppercase leading-tight">I.E. NUESTRA SEÑORA DE LA CANDELARIA</h1>
