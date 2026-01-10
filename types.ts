@@ -1,5 +1,5 @@
 
-export type EventType = 'academico' | 'institucional' | 'vacaciones' | 'festivo' | 'significativo';
+export type EventType = 'academico' | 'institucional' | 'vacaciones' | 'festivo' | 'significativo' | 'efemeride';
 
 export interface CalendarEvent {
   id: string;

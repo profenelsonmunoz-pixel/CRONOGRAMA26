@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Printer, 
   Settings, 
@@ -12,38 +12,41 @@ import {
   ArrowLeftCircle,
   ArrowRightCircle,
   Trash2, 
-  Database,
-  Users,
-  FileText,
-  FileBadge,
   Star,
   LayoutGrid,
   List as ListIcon,
-  Info,
   CalendarSearch,
-  FilterX,
-  CalendarDays,
   Edit3,
-  CloudUpload,
-  Save,
-  LogOut,
-  CheckCircle2,
-  RefreshCw,
   Search,
-  Link2
+  ChevronRight,
+  ArrowUpRight,
+  Rocket,
+  Download,
+  PartyPopper,
+  Eye,
+  MoreHorizontal,
+  Flag,
+  Trophy,
+  Briefcase,
+  Users,
+  Info,
+  CalendarDays,
+  Save,
+  BellRing,
+  Award,
+  Globe,
+  Sparkles
 } from 'lucide-react';
 import { 
   format, 
   addMonths, 
   eachDayOfInterval, 
   isWithinInterval, 
-  addYears,
   isToday,
   endOfISOWeek,
   addDays,
   isSameMonth,
   endOfMonth,
-  endOfYear,
   getDay,
   isSameDay,
   isAfter,
@@ -59,13 +62,9 @@ import {
 } from './types';
 import { 
   INITIAL_EVENTS, 
-  MONTH_NAMES, 
-  COLORS
+  MONTH_NAMES 
 } from './constants';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
-// Utilidades de fecha manuales para evitar dependencias faltantes
 const startOfISOWeek = (date: Date): Date => {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const day = d.getDay();
@@ -73,7 +72,6 @@ const startOfISOWeek = (date: Date): Date => {
   return new Date(d.setDate(diff));
 };
 const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
-const startOfYear = (date: Date): Date => new Date(date.getFullYear(), 0, 1);
 const parseISO = (dateString: string): Date => {
   if (!dateString) return new Date();
   const parts = dateString.split('-');
@@ -87,138 +85,105 @@ const startOfDay = (date: Date): Date => {
   return d;
 };
 
+const getEventFullDate = (event: CalendarEvent): Date => {
+  const fullDate = new Date(event.start);
+  const timeStr = event.time || '00:00';
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  fullDate.setHours(hours || 0, minutes || 0, 0, 0);
+  return fullDate;
+};
+
 export default function App() {
   const [events, setEvents] = useState<CalendarEvent[]>(() => {
     return INITIAL_EVENTS.map(e => ({
       ...e,
       day: e.day || format(e.start, 'EEEE', { locale: es }).toUpperCase(),
       time: e.time || '06:30',
-      location: e.location || 'Sede Administrativa',
+      location: e.location || 'Sedes IENSECAN',
       participants: e.participants || 'Comunidad Educativa',
       observations: e.observations || e.description || 'Sin observaciones adicionales',
-      description: e.description || 'Sin descripción'
+      description: e.description || e.observations || 'Sin descripción'
     }));
   });
 
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1));
-  const [view, setView] = useState<ViewType>('week');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAddingNew, setIsAddingNew] = useState(false);
   const [selectedDayEvents, setSelectedDayEvents] = useState<{ date: Date; events: CalendarEvent[] } | null>(null);
-  const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  
-  // Sincronización Google Sheets
-  const [syncProgress, setSyncProgress] = useState<number | null>(null);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success'>('idle');
-  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
-  const [inputSheetId, setInputSheetId] = useState('');
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
   const RESOLUTION_PDF_URL = "https://drive.google.com/file/d/1ITb8dynfmdWBttmjIyGLhQtz17URcLxG/view?usp=drive_link";
 
-  // Estado de búsqueda por rango
-  const [rangeSearch, setRangeSearch] = useState({ start: '', end: '', active: false });
-  const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
-
   const [formData, setFormData] = useState({
     title: '',
-    start: format(new Date(2026, 0, 1), 'yyyy-MM-dd'),
-    end: format(new Date(2026, 0, 1), 'yyyy-MM-dd'),
+    start: format(new Date(), 'yyyy-MM-dd'),
     type: 'academico' as EventType,
-    day: '',
+    day: format(new Date(), 'EEEE', { locale: es }).toUpperCase(),
     time: '06:30',
-    location: '',
-    participants: '',
+    location: 'Todas las Sedes',
+    participants: 'Comunidad Educativa',
     observations: ''
   });
 
-  useEffect(() => {
-    if (editingEvent) {
-      setFormData({
-        title: editingEvent.title,
-        start: format(editingEvent.start, 'yyyy-MM-dd'),
-        end: format(editingEvent.end, 'yyyy-MM-dd'),
-        type: editingEvent.type,
-        day: editingEvent.day || '',
-        time: editingEvent.time || '06:30',
-        location: editingEvent.location || '',
-        participants: editingEvent.participants || '',
-        observations: editingEvent.observations || ''
-      });
-      setIsFormOpen(true);
-    }
-  }, [editingEvent]);
+  const PATRON_DAY = '2026-02-02';
 
-  const isFeb2 = (date: Date) => isSameDay(date, new Date(2026, 1, 2));
+  const academicBoundaries = useMemo(() => ({
+    '2026-01-26': 'INICIO P1 / CLASES',
+    '2026-04-10': 'FINAL P1',
+    '2026-04-13': 'INICIO P2',
+    '2026-08-21': 'FINAL P2',
+    '2026-08-24': 'INICIO P3',
+    '2026-12-04': 'FINAL P3 / CLASES'
+  }), []);
 
-  const handleBulkUpload = async () => {
-    if (!inputSheetId || inputSheetId.length < 10) {
-      alert("Por favor ingrese un ID de Google Sheet válido.");
-      return;
-    }
+  const sdiBoundaries = useMemo(() => [
+    '2026-01-12', '2026-01-23', // SDI 1
+    '2026-03-30', '2026-04-03', // SDI 2
+    '2026-10-05', '2026-10-09', // SDI 3
+    '2026-12-07', '2026-12-11'  // SDI 4
+  ], []);
 
-    setIsSyncModalOpen(false);
-    setSyncStatus('syncing');
-    setSyncProgress(0);
+  const isAcademicBoundary = (date: Date) => academicBoundaries[format(date, 'yyyy-MM-dd')] !== undefined;
+  const isSDIBoundary = (date: Date) => sdiBoundaries.includes(format(date, 'yyyy-MM-dd'));
+  const isPatronDay = (date: Date) => format(date, 'yyyy-MM-dd') === PATRON_DAY;
 
-    // Simulamos la descarga y análisis del archivo de Google Sheets
-    for (let i = 0; i <= 100; i += 5) {
-      setSyncProgress(i);
-      await new Promise(r => setTimeout(r, 60));
-    }
+  const upcomingEvents = useMemo(() => {
+    return [...events]
+      .filter(e => isAfter(getEventFullDate(e), now))
+      .sort((a, b) => getEventFullDate(a).getTime() - getEventFullDate(b).getTime());
+  }, [events, now]);
 
-    // Simulamos la integración de nuevas actividades provenientes del archivo
-    const newActivities: CalendarEvent[] = [
-      {
-        id: `imported-${Math.random()}`,
-        title: 'REUNIÓN DE CONSEJO DIRECTIVO (IMPORTADO)',
-        start: new Date(2026, 1, 15),
-        end: new Date(2026, 1, 15),
-        type: 'institucional',
-        time: '08:00 AM',
-        location: 'Sede Principal',
-        participants: 'Directivos',
-        observations: `Importado desde Sheet ID: ${inputSheetId}`
-      },
-      {
-        id: `imported-${Math.random()}`,
-        title: 'TALLER DE PADRES DE FAMILIA (IMPORTADO)',
-        start: new Date(2026, 2, 10),
-        end: new Date(2026, 2, 10),
-        type: 'academico',
-        time: '07:00 AM',
-        location: 'Aula Máxima',
-        participants: 'Padres y Acudientes',
-        observations: `Importado desde Sheet ID: ${inputSheetId}`
-      }
-    ];
+  const featuredEvent = upcomingEvents[0];
+  const nextSevenEvents = upcomingEvents.slice(1, 8);
 
-    setEvents(prev => [...newActivities, ...prev]);
-    setSyncStatus('success');
-    
-    setTimeout(() => {
-      setSyncStatus('idle');
-      setSyncProgress(null);
-      alert(`Integración completada. Se han añadido nuevas actividades desde el documento ID: ${inputSheetId}`);
-      setInputSheetId('');
-    }, 1200);
+  const handleDateChange = (dateString: string) => {
+    const date = parseISO(dateString);
+    setFormData(prev => ({
+      ...prev,
+      start: dateString,
+      day: format(date, 'EEEE', { locale: es }).toUpperCase()
+    }));
   };
 
-  const handleSaveToSheets = async (event: CalendarEvent) => {
-    console.log(`Guardando en Google Sheets maestra...`, event);
-    return true;
-  };
-
-  const handleSaveEvent = async (e: React.FormEvent) => {
+  const handleSaveEvent = (e: React.FormEvent) => {
     e.preventDefault();
     const eventData: CalendarEvent = {
       id: editingEvent ? editingEvent.id : Math.random().toString(36).substr(2, 9),
       title: formData.title,
       start: startOfDay(parseISO(formData.start)),
-      end: startOfDay(parseISO(formData.end)),
+      end: startOfDay(parseISO(formData.start)),
       type: formData.type,
-      day: format(parseISO(formData.start), 'EEEE', { locale: es }).toUpperCase(),
+      day: formData.day,
       time: formData.time,
       location: formData.location,
       participants: formData.participants,
@@ -226,128 +191,11 @@ export default function App() {
       description: formData.observations
     };
 
-    if (editingEvent) {
-      setEvents(prev => prev.map(ev => ev.id === editingEvent.id ? eventData : ev));
-    } else {
-      setEvents(prev => [eventData, ...prev]);
-      await handleSaveToSheets(eventData);
-    }
+    if (editingEvent) setEvents(prev => prev.map(ev => ev.id === editingEvent.id ? eventData : ev));
+    else setEvents(prev => [eventData, ...prev]);
     
-    setIsFormOpen(false);
+    setIsAddingNew(false);
     setEditingEvent(null);
-  };
-
-  const filteredEventsForView = useMemo(() => {
-    let interval: { start: Date; end: Date };
-    if (rangeSearch.active && rangeSearch.start && rangeSearch.end) {
-      interval = { 
-        start: startOfDay(parseISO(rangeSearch.start)), 
-        end: startOfDay(parseISO(rangeSearch.end)) 
-      };
-    } else {
-      interval = view === 'week' ? { start: startOfISOWeek(currentDate), end: endOfISOWeek(startOfISOWeek(currentDate)) } :
-                 view === 'month' ? { start: startOfMonth(currentDate), end: endOfMonth(currentDate) } :
-                 { start: startOfYear(currentDate), end: endOfYear(currentDate) };
-    }
-
-    return events.filter(e => {
-        const eStart = startOfDay(e.start);
-        const eEnd = startOfDay(e.end);
-        return (isWithinInterval(eStart, interval) || isWithinInterval(eEnd, interval) || 
-               (isBefore(eStart, interval.start) && isAfter(eEnd, interval.end)));
-    }).sort((a, b) => a.start.getTime() - b.start.getTime());
-  }, [events, currentDate, view, rangeSearch]);
-
-  const handleAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    const email = (e.currentTarget as any).email.value;
-    if (email.endsWith('@iensecan.edu.co')) {
-      setIsAuthenticated(true);
-    } else {
-      alert('Error: Debe utilizar un correo institucional @iensecan.edu.co');
-    }
-  };
-
-  const logout = () => {
-    setIsAuthenticated(false);
-    setIsAdminModalOpen(false);
-    alert("Sesión finalizada. Los cambios han sido sincronizados.");
-  };
-
-  const handleActivateSearch = () => {
-    if (!rangeSearch.start || !rangeSearch.end) {
-      alert("Por favor seleccione ambas fechas para realizar la búsqueda.");
-      return;
-    }
-    setRangeSearch(prev => ({ ...prev, active: true }));
-    setDisplayMode('list');
-  };
-
-  const handleClearSearch = () => {
-    setRangeSearch({ start: '', end: '', active: false });
-    setDisplayMode('grid');
-    setIsSearchPanelOpen(false);
-  };
-
-  // --- RENDERERS DE CALENDARIO ---
-
-  const renderWeekView = () => {
-    const start = startOfISOWeek(currentDate);
-    const days = eachDayOfInterval({ start, end: addDays(start, 6) });
-    return (
-      <div className="grid grid-cols-7 bg-[#1e3a8a] gap-[1px]">
-        {days.map((day, idx) => {
-          const dayEvents = events.filter(e => isWithinInterval(startOfDay(day), { start: startOfDay(e.start), end: startOfDay(e.end) }));
-          const hasHoliday = dayEvents.some(e => e.type === 'festivo');
-          const isSaturday = getDay(day) === 6;
-          const isSunday = getDay(day) === 0;
-          const isWeekend = isSaturday || isSunday;
-          const isPatronal = isFeb2(day);
-          const isNonWorking = isWeekend || hasHoliday || isPatronal;
-
-          return (
-            <div key={idx} onClick={() => setSelectedDayEvents({ date: day, events: dayEvents })}
-              className={`min-h-[550px] p-4 cursor-pointer transition-all hover:brightness-95 flex flex-col gap-3 relative
-                ${isToday(day) ? 'ring-inset ring-4 ring-blue-700 z-10' : ''} 
-                ${isPatronal ? 'bg-amber-50 ring-inset ring-2 ring-[#facc15]' : hasHoliday ? 'bg-red-50/70' : isSunday ? 'bg-slate-100' : isSaturday ? 'bg-slate-50' : 'bg-white'}
-              `}
-            >
-              <div className="flex flex-col border-b border-blue-100 pb-2">
-                <span className={`text-[10px] font-black uppercase ${isPatronal ? 'text-amber-900' : isNonWorking ? 'text-red-700' : 'text-slate-500'}`}>{format(day, 'EEEE', { locale: es })}</span>
-                <div className="flex justify-between items-center">
-                   <span className={`text-4xl font-black tracking-tighter ${isNonWorking ? 'text-[#FF4500]' : 'text-slate-900'}`}>{format(day, 'd')}</span>
-                   <div className="flex flex-col items-end gap-1">
-                     {isPatronal && (
-                       <span className="bg-[#facc15] text-[#1e3a8a] text-[8px] px-2 py-0.5 rounded-full font-black uppercase shadow-sm flex items-center gap-1 animate-bounce">
-                          <Star size={10} fill="currentColor" /> PATRONA
-                       </span>
-                     )}
-                     {hasHoliday && (
-                       <span className="bg-red-600 text-white text-[8px] px-2 py-1 rounded-md font-black uppercase shadow-md animate-pulse">
-                          FESTIVO
-                       </span>
-                     )}
-                   </div>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 overflow-y-auto custom-scroll">
-                {dayEvents.map(e => (
-                  <div key={e.id} className={`p-2 rounded-lg text-[10px] font-bold border-l-4 shadow-sm leading-tight
-                    ${e.type === 'festivo' ? 'bg-red-100 text-red-900 border-red-700' : 
-                      e.type === 'significativo' ? 'bg-purple-100 text-purple-900 border-purple-700' : 
-                      e.type === 'institucional' ? 'bg-yellow-100 text-yellow-900 border-yellow-600' :
-                      e.type === 'vacaciones' ? 'bg-green-100 text-green-900 border-green-600' :
-                      'bg-blue-100 text-blue-900 border-blue-700'}`}>
-                    <div className="line-clamp-3">{e.title}</div>
-                    <div className="text-[8px] opacity-60 mt-1 uppercase">{e.time}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
   };
 
   const renderMonthView = () => {
@@ -355,47 +203,137 @@ export default function App() {
     const days = eachDayOfInterval({ start: startOfISOWeek(start), end: endOfISOWeek(endOfMonth(start)) });
     return (
       <div className="flex flex-col bg-[#1e3a8a]">
-        <div className="grid grid-cols-7 metallic-header text-[#1e3a8a] font-black text-[11px] uppercase py-3 text-center">
+        <div className="grid grid-cols-7 metallic-header text-[#1e3a8a] font-black text-[11px] uppercase py-3 text-center relative z-20">
           {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map(d => <div key={d}>{d}</div>)}
         </div>
-        <div className="grid grid-cols-7 gap-[1px]">
+        <div className="grid grid-cols-7 gap-[1px] relative">
           {days.map((day, idx) => {
             const dayEvents = events.filter(e => isWithinInterval(startOfDay(day), { start: startOfDay(e.start), end: startOfDay(e.end) }));
             const isCurrMonth = isSameMonth(day, currentDate);
-            const hasHoliday = dayEvents.some(e => e.type === 'festivo');
-            const isSaturday = getDay(day) === 6;
+            const dateKey = format(day, 'yyyy-MM-dd');
+            const boundaryLabel = academicBoundaries[dateKey];
+            const isAcademic = !!boundaryLabel;
+            const isPatron = isPatronDay(day);
+            const isSDI = isSDIBoundary(day);
+            const isRefToday = isToday(day);
+            const holidayEvent = dayEvents.find(e => e.type === 'festivo');
+            const efemerideEvent = dayEvents.find(e => e.type === 'efemeride');
             const isSunday = getDay(day) === 0;
-            const isWeekend = isSaturday || isSunday;
-            const isPatronal = isFeb2(day);
-            const isNonWorking = isWeekend || hasHoliday || isPatronal;
 
             return (
-              <div key={idx} onClick={() => setSelectedDayEvents({ date: day, events: dayEvents })}
-                className={`aspect-square p-3 flex flex-col cursor-pointer transition-all hover:brightness-95 relative group
-                  ${!isCurrMonth ? 'bg-slate-100 opacity-40' : isPatronal ? 'bg-amber-50' : hasHoliday ? 'bg-red-50' : isSunday ? 'bg-slate-100' : isSaturday ? 'bg-slate-50' : 'bg-white'}
-                  ${isToday(day) ? 'ring-inset ring-2 ring-blue-700 z-10' : ''}
-                  ${isPatronal ? 'ring-inset ring-2 ring-yellow-400' : ''}
+              <div 
+                key={idx} 
+                onClick={() => setSelectedDayEvents({ date: day, events: dayEvents })}
+                onMouseEnter={() => dayEvents.length > 0 && setHoveredDate(dateKey)}
+                onMouseLeave={() => setHoveredDate(null)}
+                className={`group aspect-square p-2 flex flex-col cursor-pointer transition-all hover:brightness-95 relative
+                  ${!isCurrMonth ? 'bg-slate-100 opacity-40' : 
+                    isRefToday ? 'bg-yellow-50 ring-inset ring-4 ring-[#facc15] z-10 shadow-xl' :
+                    isPatron ? 'bg-yellow-50 ring-inset ring-4 ring-yellow-400 z-10 scale-[1.05] shadow-[0_0_30px_rgba(250,204,21,0.4)]' :
+                    isAcademic ? 'bg-emerald-50 ring-inset ring-2 ring-emerald-500 z-10 scale-[1.02] shadow-xl' :
+                    isSDI ? 'bg-blue-50 ring-inset ring-2 ring-blue-500 z-10' : 
+                    efemerideEvent ? 'bg-violet-50/50' :
+                    holidayEvent ? 'bg-red-50' : 
+                    isSunday ? 'bg-slate-50' : 'bg-white'}
                 `}
               >
                 <div className="flex justify-between items-start">
-                  <span className={`text-3xl font-black ${!isCurrMonth ? 'text-slate-300' : isNonWorking ? 'text-[#FF4500]' : 'text-slate-900'}`}>{format(day, 'd')}</span>
-                  <div className="flex flex-col items-end gap-1">
-                    {isPatronal && isCurrMonth && <Star size={14} fill="#facc15" className="text-amber-500 drop-shadow-sm" />}
-                    {hasHoliday && isCurrMonth && (
-                      <span className="text-[7px] font-black text-white bg-red-600 px-1.5 py-0.5 rounded shadow-sm uppercase">FESTIVO</span>
-                    )}
-                  </div>
+                   <span className={`text-xl font-black 
+                     ${!isCurrMonth ? 'text-slate-300' : 
+                       isRefToday ? 'text-blue-900' :
+                       isPatron ? 'text-yellow-700' :
+                       isAcademic ? 'text-emerald-800' :
+                       isSDI ? 'text-blue-800' : 
+                       efemerideEvent ? 'text-violet-700' :
+                       holidayEvent ? 'text-red-600' : 
+                       isSunday ? 'text-red-400' : 'text-slate-900'}
+                   `}>
+                     {format(day, 'd')}
+                   </span>
+                   <div className="flex gap-1">
+                      {isPatron && <Sparkles size={16} className="text-yellow-500 animate-pulse" />}
+                      {isRefToday && <div className="bg-[#facc15] text-[#1e3a8a] text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-sm animate-pulse">HOY</div>}
+                      {efemerideEvent && <Globe size={12} className="text-violet-500" />}
+                      {isAcademic && <Award size={14} className="text-emerald-600" />}
+                      {holidayEvent && <Star size={12} className="text-red-500 fill-red-500" />}
+                   </div>
                 </div>
-                <div className="mt-auto flex flex-wrap gap-1">
-                  {dayEvents.map(e => (
-                    <div key={e.id} title={e.title} className={`w-2 h-2 rounded-full border border-white shadow-sm ${
-                      e.type === 'festivo' ? 'bg-red-600' : 
-                      e.type === 'significativo' ? 'bg-purple-600' : 
-                      e.type === 'institucional' ? 'bg-yellow-500' :
-                      e.type === 'vacaciones' ? 'bg-green-600' : 'bg-blue-600'
-                    }`} />
-                  ))}
+
+                <div className="mt-1 space-y-0.5 overflow-hidden">
+                   {isPatron && isCurrMonth && (
+                     <div className="bg-yellow-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-md w-fit border border-yellow-200 animate-bounce">
+                       DÍA PATRONAL
+                     </div>
+                   )}
+                   {isAcademic && isCurrMonth && !isPatron && (
+                     <div className="bg-emerald-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-sm w-fit border border-emerald-400 animate-pulse">
+                       {boundaryLabel}
+                     </div>
+                   )}
+                   {efemerideEvent && isCurrMonth && !isAcademic && !isPatron && (
+                     <div className="bg-violet-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-sm w-fit border border-violet-400">
+                       EFEMÉRIDE
+                     </div>
+                   )}
+                   {isSDI && isCurrMonth && !isAcademic && !isPatron && !efemerideEvent && (
+                     <div className="bg-blue-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-sm w-fit border border-blue-400">
+                       HITO SDI
+                     </div>
+                   )}
+                   {holidayEvent && isCurrMonth && !isAcademic && !isPatron && !efemerideEvent && (
+                     <div className="bg-red-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-sm w-fit animate-pulse border border-red-400">
+                       FESTIVO
+                     </div>
+                   )}
+                   {dayEvents.slice(0, 1).map(e => (
+                     <div key={e.id} className={`text-[6px] font-black uppercase truncate px-1 rounded-sm
+                       ${isPatronDay(e.start) ? 'bg-yellow-700 text-white' :
+                         isAcademicBoundary(e.start) ? 'bg-emerald-700 text-white' :
+                         e.type === 'efemeride' ? 'bg-violet-100 text-violet-800' :
+                         e.type === 'festivo' ? 'bg-red-100 text-red-700' : 
+                         e.type === 'institucional' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-blue-900'}
+                     `}>
+                       {e.title}
+                     </div>
+                   ))}
                 </div>
+
+                <AnimatePresence>
+                  {hoveredDate === dateKey && dayEvents.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className={`absolute left-0 top-full mt-2 min-w-[280px] z-[100] rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.4)] border-2 p-5 backdrop-blur-3xl
+                        ${isPatron ? 'bg-yellow-950/95 border-yellow-400' : isAcademic ? 'bg-emerald-950/95 border-emerald-400' : efemerideEvent ? 'bg-violet-950/95 border-violet-400' : 'bg-slate-900/95 border-blue-400'}
+                      `}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#facc15] flex items-center gap-2">
+                          {isPatron ? <Sparkles size={14}/> : isAcademic ? <Award size={14}/> : efemerideEvent ? <Globe size={14}/> : <CalendarIcon size={14} />} Detalle de Agenda
+                        </span>
+                        <MoreHorizontal size={14} className="text-white/40" />
+                      </div>
+                      <div className="space-y-3">
+                        {dayEvents.map(e => (
+                          <div 
+                            key={e.id}
+                            onClick={() => setSelectedDayEvents({ date: day, events: [e] })}
+                            className="group/item flex items-center gap-3 p-3 rounded-xl hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
+                          >
+                            <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isPatronDay(e.start) ? 'bg-yellow-400 animate-pulse' : isAcademicBoundary(e.start) ? 'bg-emerald-400 animate-pulse' : e.type === 'efemeride' ? 'bg-violet-400' : 'bg-blue-400'}`}></div>
+                            <div className="flex-grow">
+                              <p className="text-[11px] font-black text-white uppercase leading-tight group-hover/item:text-[#facc15]">{e.title}</p>
+                              <p className="text-[8px] text-white/50 font-bold uppercase tracking-tighter">{e.type} | {e.time}</p>
+                            </div>
+                            <ChevronRight size={14} className="text-white/20 group-hover/item:text-white transition-all group-hover/item:translate-x-1" />
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             );
           })}
@@ -404,543 +342,358 @@ export default function App() {
     );
   };
 
-  const renderYearView = () => (
-    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8 p-8 bg-white overflow-y-auto max-h-[750px] custom-scroll">
-      {Array.from({ length: 12 }).map((_, monthIdx) => {
-        const monthDate = new Date(currentDate.getFullYear(), monthIdx, 1);
-        const days = eachDayOfInterval({ start: startOfISOWeek(monthDate), end: endOfISOWeek(endOfMonth(monthDate)) });
-        return (
-          <div key={monthIdx} className="border-2 border-blue-900/5 p-4 rounded-[2rem] bg-slate-50/50 shadow-sm hover:shadow-md transition-all">
-            <h4 className="text-sm font-black text-blue-900 uppercase mb-4 text-center border-b-2 border-yellow-400 pb-1">{MONTH_NAMES[monthIdx]}</h4>
-            <div className="grid grid-cols-7 gap-1.5">
-              {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(d => <div key={d} className="text-[9px] font-black text-slate-400 text-center">{d}</div>)}
-              {days.map((day, dIdx) => {
-                const isCurrMonth = day.getMonth() === monthIdx;
-                const dayEvents = events.filter(e => isWithinInterval(startOfDay(day), { start: startOfDay(e.start), end: startOfDay(e.end) }));
-                const hasHoliday = dayEvents.some(e => e.type === 'festivo');
-                const isWeekend = getDay(day) === 0 || getDay(day) === 6;
-                const isPatronal = isFeb2(day);
-                const isNonWorking = isWeekend || hasHoliday || isPatronal;
-
-                return (
-                  <div key={dIdx} onClick={() => isCurrMonth && setSelectedDayEvents({ date: day, events: dayEvents })}
-                    className={`aspect-square flex items-center justify-center text-[11px] font-black rounded-xl transition-all cursor-pointer border border-transparent
-                      ${!isCurrMonth ? 'opacity-0 pointer-events-none' : dayEvents.length > 0 ? 'bg-blue-100 text-blue-900 border-blue-200' : 'hover:bg-slate-200'}
-                      ${isPatronal ? 'bg-amber-100 ring-1 ring-yellow-400 border-yellow-300' : ''}
-                      ${hasHoliday ? 'bg-red-100 ring-1 ring-red-400 text-red-700' : ''}
-                      ${isToday(day) && isCurrMonth ? 'bg-blue-900 text-white shadow-lg scale-110 z-10' : ''}
-                    `}
-                  >
-                    <span className={isNonWorking && isCurrMonth && !isToday(day) ? 'text-[#FF4500]' : ''}>{format(day, 'd')}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const renderListView = () => (
-    <div className="flex flex-col gap-4 p-8 bg-slate-50/50 min-h-[600px] overflow-y-auto max-h-[800px] custom-scroll">
-      <div className="flex justify-between items-end border-b-2 border-[#facc15] pb-2 mb-4">
-        <div>
-           <h4 className="text-sm font-black text-[#1e3a8a] uppercase tracking-widest">
-             {rangeSearch.active ? `Resultados de Búsqueda: ${format(parseISO(rangeSearch.start), 'dd/MM/yy')} al ${format(parseISO(rangeSearch.end), 'dd/MM/yy')}` : 'Informe de Actividades'}
-           </h4>
-           {rangeSearch.active && (
-             <button onClick={handleClearSearch} className="text-[10px] font-bold text-red-600 uppercase flex items-center gap-1 mt-1 hover:underline">
-               <FilterX size={12} /> Limpiar Filtro de Búsqueda
-             </button>
-           )}
-        </div>
-        <span className="text-[10px] font-bold text-slate-400 uppercase">Total: {filteredEventsForView.length} Entradas</span>
-      </div>
-      {filteredEventsForView.length > 0 ? filteredEventsForView.map((e) => (
-        <motion.div key={e.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-          className="bg-white border-2 border-blue-50 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex gap-6 group"
-          onClick={() => setSelectedDayEvents({ date: e.start, events: [e] })}
-        >
-          <div className="flex flex-col items-center justify-center min-w-[100px] border-r border-blue-100 pr-6">
-            <span className="text-[10px] font-black text-slate-400 uppercase">{e.day}</span>
-            <span className={`text-3xl font-black ${getDay(e.start) === 0 || e.type === 'festivo' ? 'text-[#FF4500]' : 'text-blue-900'}`}>{format(e.start, 'dd')}</span>
-            <span className="text-[9px] font-bold text-slate-500 uppercase">{format(e.start, 'MMM', { locale: es })}</span>
-          </div>
-          <div className="flex-grow">
-            <div className="flex items-center gap-2 mb-2">
-               <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase text-white ${
-                 e.type === 'festivo' ? 'bg-red-700' : 
-                 e.type === 'significativo' ? 'bg-purple-700' : 
-                 e.type === 'institucional' ? 'bg-yellow-500' : 'bg-blue-700'
-               }`}>{e.type === 'festivo' ? 'FESTIVO NACIONAL' : e.type}</span>
-               <h5 className="font-black text-blue-900 text-base uppercase">{e.title}</h5>
-            </div>
-            <div className="flex flex-wrap gap-4 text-[10px] text-slate-500 font-bold uppercase">
-              <span className="flex items-center gap-1"><Clock size={12} className="text-blue-500" /> {e.time}</span>
-              <span className="flex items-center gap-1"><MapPin size={12} className="text-blue-500" /> {e.location}</span>
-              <span className="flex items-center gap-1"><Users size={12} className="text-blue-500" /> {e.participants}</span>
-            </div>
-          </div>
-          <div className="flex items-center"><Info size={24} className="text-blue-100 group-hover:text-blue-400 transition-colors" /></div>
-        </motion.div>
-      )) : (
-        <div className="py-24 text-center opacity-20 font-black uppercase text-xl">Sin actividades para este periodo</div>
-      )}
-    </div>
-  );
-
   return (
     <div className="min-h-screen flex flex-col bg-slate-100">
-      <header className="bg-white border-b-2 border-[#1e3a8a] shadow-lg py-6 px-4 no-print">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+      <header className="bg-white border-b-2 border-[#1e3a8a] shadow-lg py-6 px-4 no-print relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-full bg-blue-900/5 -skew-x-12 transform translate-x-20"></div>
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
           <div className="flex items-center gap-10">
-            {/* LOGO MÁS GRANDE E IMAGEN OFICIAL */}
-            <div className="w-36 h-36 bg-white p-2 rounded-3xl shadow-inner border border-blue-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="w-32 h-32 md:w-36 md:h-36 bg-white p-2 rounded-3xl shadow-inner border border-blue-50 flex items-center justify-center overflow-hidden flex-shrink-0">
               <img src="https://iensecan.edu.co/wp-content/uploads/2024/08/ESCUDO-IENSECAN-2020-2.png" alt="Escudo IENSECAN" className="max-w-full max-h-full object-contain" />
             </div>
             <div>
-              <h1 className="text-xl md:text-3xl font-black text-[#1e3a8a] tracking-tight uppercase leading-tight">I.E. NUESTRA SEÑORA DE LA CANDELARIA</h1>
-              <p className="text-xs font-bold text-slate-500 tracking-widest uppercase mt-1">Calendario Escolar & Cronograma 2026</p>
+              <h1 className="text-lg md:text-xl font-bold text-slate-400 tracking-tight uppercase leading-tight mb-1">I.E. NUESTRA SEÑORA DE LA CANDELARIA</h1>
+              <div className="relative inline-block">
+                <h2 className="text-3xl md:text-4xl font-black text-[#1e3a8a] tracking-tighter uppercase drop-shadow-sm">CALENDARIO ACADÉMICO 2026</h2>
+                <div className="h-1.5 w-full bg-gradient-to-r from-[#1e3a8a] via-[#facc15] to-[#1e3a8a] mt-1 rounded-full shadow-sm"></div>
+              </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-4">
-            <a 
-              href={RESOLUTION_PDF_URL} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="bg-red-50 text-red-600 px-6 py-3 rounded-2xl font-black text-xs flex items-center gap-2 transition-all hover:bg-red-100 uppercase shadow-sm border border-red-100"
-            >
-              <FileBadge size={18} /> Resolución 1.210.03.01
+          <div className="flex flex-wrap gap-4 items-center">
+            <a href={RESOLUTION_PDF_URL} target="_blank" rel="noopener noreferrer" 
+               className="bg-red-600 text-white px-8 py-4 rounded-2xl font-black text-xs flex items-center gap-3 transition-all hover:bg-red-700 hover:scale-105 uppercase shadow-[0_10px_20px_rgba(220,38,38,0.3)] border-2 border-red-400">
+              <Download size={20} /> DESCARGAR RESOLUCIÓN 1.210.03.01
             </a>
-            <button onClick={() => setIsAdminModalOpen(true)} className="bg-blue-50 text-[#1e3a8a] px-6 py-3 rounded-2xl font-black text-xs flex items-center gap-2 transition-all hover:bg-blue-100 uppercase shadow-sm">
-              <Settings size={18} /> GESTIÓN
-            </button>
-            <button onClick={() => window.print()} className="bg-slate-50 text-slate-500 px-6 py-3 rounded-2xl font-black text-xs flex items-center gap-2 transition-all hover:bg-slate-100 uppercase">
-              <Printer size={18} /> IMPRIMIR
-            </button>
+            <button onClick={() => setIsAdminModalOpen(true)} className="bg-blue-900 text-white px-6 py-4 rounded-2xl font-black text-xs flex items-center gap-2 transition-all hover:bg-blue-800 uppercase"><Settings size={18} /> GESTIÓN</button>
+            <button onClick={() => window.print()} className="bg-slate-50 text-slate-500 px-6 py-4 rounded-2xl font-black text-xs flex items-center gap-2 transition-all hover:bg-slate-100 uppercase"><Printer size={18} /> IMPRIMIR</button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 flex-grow w-full">
-        <section className="bg-white rounded-[3.5rem] shadow-2xl border-4 border-blue-900 overflow-hidden metallic-3d-frame relative">
-          <div className="bg-blue-900 p-8 flex flex-col no-print relative z-10">
-            {/* Barra superior de controles principales */}
-            <div className="flex flex-wrap justify-between items-center gap-8 text-white mb-6">
-              <div className="flex items-center gap-6">
-                <button onClick={() => setCurrentDate(addMonths(currentDate, -1))} className="p-2 hover:bg-white/20 rounded-full transition-all active:scale-90"><ArrowLeftCircle size={36} /></button>
-                <h3 className="text-2xl font-black uppercase tracking-tighter min-w-[200px] text-center">{MONTH_NAMES[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
-                <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 hover:bg-white/20 rounded-full transition-all active:scale-90"><ArrowRightCircle size={36} /></button>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <button 
-                  onClick={() => setIsSearchPanelOpen(!isSearchPanelOpen)} 
-                  className={`px-6 py-3 rounded-2xl font-black text-[11px] uppercase transition-all shadow-lg flex items-center gap-2 ${isSearchPanelOpen || rangeSearch.active ? 'bg-white text-blue-900' : 'bg-[#facc15]/20 text-[#facc15] hover:bg-[#facc15]/30'}`}
-                >
-                  <CalendarSearch size={18} /> {rangeSearch.active ? 'Filtro Activo' : 'Buscador'}
-                </button>
-                {(['week', 'month', 'year'] as ViewType[]).map(v => (
-                  <button key={v} onClick={() => { setView(v); setRangeSearch(prev => ({...prev, active: false})); }} className={`px-6 py-3 rounded-2xl font-black text-[11px] uppercase transition-all shadow-lg active:scale-95 ${view === v && !rangeSearch.active ? 'bg-[#facc15] text-blue-900' : 'bg-white/10 hover:bg-white/20'}`}>
-                    {v === 'week' ? 'Semana' : v === 'month' ? 'Mes' : 'Año'}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex bg-white/10 p-1.5 rounded-2xl border border-white/10">
-                <button onClick={() => { setDisplayMode('grid'); setRangeSearch(prev => ({...prev, active: false})); }} className={`p-3 rounded-xl transition-all ${displayMode === 'grid' && !rangeSearch.active ? 'bg-white text-blue-900 shadow-xl' : 'text-white/50 hover:bg-white/10'}`}><LayoutGrid size={24}/></button>
-                <button onClick={() => setDisplayMode('list')} className={`p-3 rounded-xl transition-all ${displayMode === 'list' || rangeSearch.active ? 'bg-white text-blue-900 shadow-xl' : 'text-white/50 hover:bg-white/10'}`}><ListIcon size={24}/></button>
-              </div>
+      <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-12 flex-grow w-full">
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 no-print">
+          <div className="lg:col-span-7">
+            <div className="flex items-center gap-3 mb-6">
+              <BellRing className="text-blue-900 animate-pulse" size={24} />
+              <h3 className="text-xl font-black text-blue-900 uppercase tracking-tighter">Próxima Actividad Inmediata</h3>
             </div>
-
-            {/* Panel de Búsqueda por Fechas */}
-            <AnimatePresence>
-              {isSearchPanelOpen && (
+            <AnimatePresence mode="wait">
+              {featuredEvent ? (
                 <motion.div 
-                  initial={{ height: 0, opacity: 0 }} 
-                  animate={{ height: 'auto', opacity: 1 }} 
-                  exit={{ height: 0, opacity: 0 }}
-                  className="bg-white/10 backdrop-blur-md rounded-[2rem] border border-white/20 p-6 overflow-hidden"
+                  initial={{ opacity: 0, x: -20 }} 
+                  animate={{ opacity: 1, x: 0 }}
+                  className={`bg-white rounded-[3.5rem] p-10 shadow-2xl border-4 relative overflow-hidden group
+                    ${isPatronDay(featuredEvent.start) ? 'border-yellow-500 ring-8 ring-yellow-500/10' : isAcademicBoundary(featuredEvent.start) ? 'border-emerald-500 ring-8 ring-emerald-500/10' : featuredEvent.type === 'efemeride' ? 'border-violet-500 ring-8 ring-violet-500/10' : 'border-blue-900'}
+                  `}
                 >
-                  <div className="flex flex-col md:flex-row items-end gap-6">
-                    <div className="flex-1 space-y-2">
-                       <label className="text-[10px] font-black uppercase text-white/60 ml-4">Fecha Inicial</label>
-                       <input 
-                        type="date" 
-                        value={rangeSearch.start} 
-                        onChange={e => setRangeSearch({...rangeSearch, start: e.target.value})}
-                        className="w-full bg-white text-blue-900 p-4 rounded-xl font-black text-sm outline-none focus:ring-4 focus:ring-[#facc15]/50"
-                       />
+                  <div className="absolute top-0 right-0 p-8 text-blue-900/10"><Trophy size={140}/></div>
+                  <div className="relative z-10 space-y-6">
+                    <div className="flex items-center gap-3">
+                      <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm
+                        ${isPatronDay(featuredEvent.start) ? 'bg-yellow-600 text-white animate-bounce' : isAcademicBoundary(featuredEvent.start) ? 'bg-emerald-600 text-white animate-bounce' : featuredEvent.type === 'efemeride' ? 'bg-violet-600 text-white' : 'bg-[#facc15] text-[#1e3a8a]'}
+                      `}>
+                        {isPatronDay(featuredEvent.start) ? '¡GALA PATRONAL IENSECAN!' : isAcademicBoundary(featuredEvent.start) ? 'HITO ACADÉMICO CRUCIAL' : featuredEvent.type === 'efemeride' ? 'CELEBRACIÓN INTERNACIONAL' : 'SIGUIENTE EN AGENDA'}
+                      </span>
                     </div>
-                    <div className="flex-1 space-y-2">
-                       <label className="text-[10px] font-black uppercase text-white/60 ml-4">Fecha Final</label>
-                       <input 
-                        type="date" 
-                        value={rangeSearch.end} 
-                        onChange={e => setRangeSearch({...rangeSearch, end: e.target.value})}
-                        className="w-full bg-white text-blue-900 p-4 rounded-xl font-black text-sm outline-none focus:ring-4 focus:ring-[#facc15]/50"
-                       />
+                    <h4 className={`text-4xl md:text-6xl font-black uppercase tracking-tighter leading-none ${isPatronDay(featuredEvent.start) ? 'text-yellow-700' : 'text-blue-950'}`}>
+                      {featuredEvent.title}
+                    </h4>
+                    
+                    <div className="bg-blue-50/50 p-6 rounded-[2.5rem] border border-blue-100 space-y-4">
+                      <p className="text-sm md:text-base text-slate-600 font-medium italic leading-relaxed">
+                        "{featuredEvent.observations || featuredEvent.description}"
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-blue-100">
+                        <div className="flex items-center gap-2 text-[11px] font-black text-blue-900 uppercase">
+                           <CalendarIcon size={16} className="text-[#facc15]"/> {format(featuredEvent.start, 'EEEE dd MMMM', { locale: es })}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] font-black text-blue-900 uppercase">
+                           <Clock size={16} className="text-[#facc15]"/> {featuredEvent.time}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] font-black text-blue-900 uppercase">
+                           <MapPin size={16} className="text-[#facc15]"/> {featuredEvent.location}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex gap-3">
-                      <button 
-                        onClick={handleActivateSearch}
-                        className="bg-[#facc15] text-blue-900 px-10 py-4 rounded-xl font-black uppercase text-xs flex items-center gap-2 hover:bg-yellow-500 transition-all shadow-xl active:scale-95"
-                      >
-                        <Search size={18} /> Buscar Actividades
-                      </button>
-                      <button 
-                        onClick={handleClearSearch}
-                        className="bg-white/10 text-white px-6 py-4 rounded-xl font-black uppercase text-xs hover:bg-white/20 transition-all"
-                      >
-                        Limpiar
-                      </button>
-                    </div>
+                    
+                    <button onClick={() => setSelectedDayEvents({ date: featuredEvent.start, events: [featuredEvent] })} 
+                            className={`${isPatronDay(featuredEvent.start) ? 'bg-yellow-600' : 'bg-blue-900'} text-white px-10 py-5 rounded-2xl font-black uppercase text-xs flex items-center gap-3 shadow-xl hover:scale-105 transition-all`}>
+                      Ver Ficha Completa <ArrowUpRight size={20}/>
+                    </button>
                   </div>
                 </motion.div>
+              ) : (
+                <div className="bg-white rounded-[3.5rem] p-20 shadow-xl border-2 border-slate-100 text-center">
+                  <CalendarSearch size={64} className="mx-auto text-slate-200 mb-6" />
+                  <p className="text-slate-400 font-black uppercase tracking-widest">Agenda despejada para este periodo</p>
+                </div>
               )}
             </AnimatePresence>
           </div>
 
-          <div className="min-h-[650px] relative">
-            <div className="glass-highlight" />
-            <AnimatePresence mode="wait">
-               <motion.div key={`${view}-${displayMode}-${rangeSearch.active}-${currentDate.getTime()}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                  {(displayMode === 'grid' && !rangeSearch.active) ? (
-                     view === 'week' ? renderWeekView() : view === 'month' ? renderMonthView() : renderYearView()
-                  ) : renderListView()}
-               </motion.div>
-            </AnimatePresence>
+          <div className="lg:col-span-5 flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-blue-900 uppercase tracking-tighter">Próximos 7 Eventos</h3>
+              <div className="h-0.5 flex-grow mx-4 bg-slate-200"></div>
+            </div>
+            <div className="space-y-3 overflow-y-auto max-h-[500px] pr-2 custom-scroll">
+               {nextSevenEvents.map((e, idx) => {
+                 const isAcademic = isAcademicBoundary(e.start);
+                 const isSDI = isSDIBoundary(e.start);
+                 const isPatron = isPatronDay(e.start);
+                 const isEfemeride = e.type === 'efemeride';
+                 return (
+                   <motion.div 
+                     key={e.id} 
+                     initial={{ opacity: 0, y: 10 }} 
+                     animate={{ opacity: 1, y: 0 }} 
+                     transition={{ delay: idx * 0.05 }}
+                     onClick={() => setSelectedDayEvents({ date: e.start, events: [e] })}
+                     className={`p-5 rounded-3xl border-2 transition-all cursor-pointer group flex items-center gap-5 shadow-sm
+                       ${isPatron ? 'bg-yellow-100 border-yellow-500' : isAcademic ? 'bg-emerald-100 border-emerald-500' : isEfemeride ? 'bg-violet-50 border-violet-500' : isSDI ? 'bg-blue-50 border-blue-500' : 'bg-white border-blue-50 hover:border-[#facc15]'}
+                     `}
+                   >
+                      <div className={`min-w-[65px] h-16 rounded-2xl flex flex-col items-center justify-center border 
+                        ${isPatron ? 'bg-yellow-200 border-yellow-400 text-yellow-900' : isAcademic ? 'bg-emerald-200 border-emerald-400 text-emerald-900' : isEfemeride ? 'bg-violet-200 border-violet-400 text-violet-900' : 'bg-blue-50 border-blue-100 text-[#1e3a8a]'}
+                      `}>
+                          <span className="text-[9px] font-black uppercase leading-none">{format(e.start, 'MMM', { locale: es })}</span>
+                          <span className="text-2xl font-black leading-none">{format(e.start, 'dd')}</span>
+                      </div>
+                      <div className="flex-grow">
+                          <h5 className={`text-[11px] font-black uppercase line-clamp-1 transition-colors ${isPatron ? 'text-yellow-900' : isAcademic ? 'text-emerald-900' : isEfemeride ? 'text-violet-900' : 'text-blue-950 group-hover:text-blue-600'}`}>{e.title}</h5>
+                          <p className="text-[9px] text-slate-400 font-medium italic line-clamp-1 mt-1">"{e.observations || e.description}"</p>
+                      </div>
+                      <ChevronRight size={18} className="text-slate-200 group-hover:text-[#facc15] transition-all" />
+                   </motion.div>
+                 );
+               })}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-[3.5rem] shadow-2xl border-4 border-blue-900 overflow-hidden metallic-3d-frame no-print">
+          <div className="bg-blue-900 p-8 flex flex-wrap justify-between items-center gap-6">
+            <div className="flex items-center gap-6 text-white">
+              <button onClick={() => setCurrentDate(addMonths(currentDate, -1))} className="p-2 hover:bg-white/20 rounded-full transition-all active:scale-90"><ArrowLeftCircle size={36} /></button>
+              <h3 className="text-2xl font-black uppercase tracking-tighter min-w-[200px] text-center">{MONTH_NAMES[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
+              <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 hover:bg-white/20 rounded-full transition-all active:scale-90"><ArrowRightCircle size={36} /></button>
+            </div>
+            <div className="flex bg-white/10 p-1.5 rounded-2xl border border-white/10">
+              <button onClick={() => setDisplayMode('grid')} className={`p-3 rounded-xl transition-all ${displayMode === 'grid' ? 'bg-white text-blue-900' : 'text-white/50'}`}><LayoutGrid size={24}/></button>
+              <button onClick={() => setDisplayMode('list')} className={`p-3 rounded-xl transition-all ${displayMode === 'list' ? 'bg-white text-blue-900' : 'text-white/50'}`}><ListIcon size={24}/></button>
+            </div>
+          </div>
+          <div className="min-h-[600px] bg-slate-100">
+            {displayMode === 'grid' ? renderMonthView() : (
+              <div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {events.filter(e => isSameMonth(e.start, currentDate)).map(e => (
+                   <div key={e.id} className="p-8 bg-white rounded-[2.5rem] border-2 border-blue-50 hover:border-[#facc15] transition-all cursor-pointer shadow-sm group" onClick={() => setSelectedDayEvents({ date: e.start, events: [e] })}>
+                      <div className="flex justify-between items-start mb-4">
+                        <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${isPatronDay(e.start) ? 'bg-yellow-600 text-white' : e.type === 'efemeride' ? 'bg-violet-900 text-white' : 'bg-blue-900 text-[#facc15]'}`}>
+                          {format(e.start, 'dd MMMM', { locale: es })}
+                        </span>
+                        <ArrowUpRight size={20} className="text-slate-200 group-hover:text-blue-900 transition-all" />
+                      </div>
+                      <h5 className="font-black text-blue-950 uppercase text-xl leading-tight mb-4">{e.title}</h5>
+                      <div className="flex flex-wrap gap-4 text-[9px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-4">
+                        <span className="flex items-center gap-1"><Clock size={12}/> {e.time}</span>
+                        <span className="flex items-center gap-1"><MapPin size={12}/> {e.location}</span>
+                      </div>
+                   </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </main>
 
-      <footer className="bg-blue-900 text-white py-16 text-center text-xs border-t-4 border-[#facc15]">
-        <div className="max-w-3xl mx-auto px-6">
-          <p className="font-black uppercase tracking-widest text-2xl mb-4 leading-tight">Institución Educativa Nuestra Señora de la Candelaria</p>
-          <p className="opacity-80 font-bold mb-4">Candelaria, Valle del Cauca - Colombia | Sede Administrativa: Nelson Muñoz</p>
-          <p className="text-[#facc15] font-bold text-sm mb-8 italic">Website Programmed by the Webmaster: Nelson Muñoz.</p>
-          
-          <div className="flex justify-center gap-12">
-             <div className="flex flex-col items-center opacity-40"><span className="text-3xl font-black">2026</span><span className="text-[10px] font-black uppercase">Académico</span></div>
-             <div className="w-px h-12 bg-white opacity-40"></div>
-             <a href={RESOLUTION_PDF_URL} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center hover:scale-110 transition-transform group">
-                <span className="text-3xl font-black group-hover:text-[#facc15] transition-colors">OFICIAL</span>
-                <span className="text-[10px] font-black uppercase text-slate-400 group-hover:text-white">Resolución No. 1.210.03.01</span>
-             </a>
+      {/* MODAL DETALLES DEL DÍA */}
+      <AnimatePresence>
+        {selectedDayEvents && (
+          <div className="fixed inset-0 bg-blue-950/70 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
+             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className={`bg-white rounded-[4rem] w-full max-w-2xl shadow-2xl overflow-hidden border-4 ${isPatronDay(selectedDayEvents.date) ? 'border-yellow-500 shadow-[0_0_50px_rgba(234,179,8,0.3)]' : isAcademicBoundary(selectedDayEvents.date) ? 'border-emerald-500' : selectedDayEvents.events.some(e => e.type === 'efemeride') ? 'border-violet-500' : 'border-blue-900'}`}>
+                <div className={`p-10 text-white flex justify-between items-center ${isPatronDay(selectedDayEvents.date) ? 'bg-yellow-600' : isAcademicBoundary(selectedDayEvents.date) ? 'bg-emerald-600' : 'bg-blue-900'}`}>
+                  <div>
+                    <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">{format(selectedDayEvents.date, 'dd MMMM', { locale: es })}</h4>
+                    <p className="text-[11px] font-black uppercase opacity-60 mt-2">{format(selectedDayEvents.date, 'EEEE', { locale: es })}</p>
+                  </div>
+                  <button onClick={() => setSelectedDayEvents(null)} className="bg-white/20 p-4 rounded-full hover:bg-white/30 transition-all"><X size={32}/></button>
+                </div>
+                <div className="p-10 space-y-8 max-h-[60vh] overflow-y-auto custom-scroll bg-slate-50">
+                  {selectedDayEvents.events.map(e => (
+                    <div key={e.id} className={`p-8 rounded-[3rem] shadow-xl border-2 bg-white space-y-6 relative overflow-hidden ${isPatronDay(e.start) ? 'border-yellow-400' : isAcademicBoundary(e.start) ? 'border-emerald-500' : e.type === 'efemeride' ? 'border-violet-500' : 'border-white'}`}>
+                      {isPatronDay(e.start) && <div className="absolute -top-6 -right-6 text-yellow-100/50 rotate-12"><Sparkles size={120} /></div>}
+                      <div className="flex items-start gap-4">
+                        <div className={`p-4 rounded-2xl ${isPatronDay(e.start) ? 'bg-yellow-100 text-yellow-700' : isAcademicBoundary(e.start) ? 'bg-emerald-100 text-emerald-700' : e.type === 'efemeride' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'}`}><CalendarDays size={24}/></div>
+                        <div className="flex-grow">
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${isPatronDay(e.start) ? 'text-yellow-600' : isAcademicBoundary(e.start) ? 'text-emerald-500' : 'text-blue-500'}`}>
+                              {isPatronDay(e.start) ? 'SOLEMNIDAD INSTITUCIONAL' : e.type === 'efemeride' ? 'EFEMÉRIDE / DÍA INTERNACIONAL' : 'HITO INSTITUCIONAL / REUNIÓN'}
+                            </span>
+                            <h5 className={`text-2xl font-black uppercase leading-tight ${isPatronDay(e.start) ? 'text-yellow-800' : 'text-blue-950'}`}>{e.title}</h5>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-6 border-t border-slate-100">
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">FECHA</span>
+                            <p className="text-[10px] font-black text-blue-900">{format(e.start, 'dd-MM-yyyy')}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">DIA</span>
+                            <p className="text-[10px] font-black text-blue-900 uppercase">{e.day || format(e.start, 'EEEE', { locale: es })}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">HORA</span>
+                            <p className="text-[10px] font-black text-blue-900">{e.time}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">LUGAR</span>
+                            <p className="text-[10px] font-black text-blue-900 uppercase">{e.location}</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 pt-6 border-t border-slate-100">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Users size={12}/> PARTICIPANTES</span>
+                        <p className="text-[11px] font-bold text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">{e.participants || 'Comunidad Educativa'}</p>
+                      </div>
+
+                      <div className="space-y-2 pt-4">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Info size={12}/> OBSERVACIONES</span>
+                        <p className={`text-[11px] font-medium italic leading-relaxed p-4 rounded-2xl border ${isPatronDay(e.start) ? 'bg-yellow-50 border-yellow-100 text-yellow-800' : 'bg-blue-50/30 border-blue-50 text-slate-600'}`}>"{e.observations || 'Sin observaciones'}"</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <footer className="bg-blue-900 text-white py-16 text-center text-xs border-t-4 border-[#facc15]">
+        <div className="max-w-4xl mx-auto px-6 space-y-4">
+          <p className="font-black uppercase tracking-widest text-2xl mb-4 leading-tight">Institución Educativa Nuestra Señora de la Candelaria</p>
+          <div className="flex flex-wrap justify-center gap-6 text-slate-300 font-bold uppercase tracking-widest">
+             <span className="flex items-center gap-2"><MapPin size={14}/> Candelaria, Valle del Cauca</span>
+             <span className="flex items-center gap-2">Sede Administrativa: Nelson Muñoz</span>
+          </div>
+          <p className="text-[#facc15] font-black text-base mt-8 shadow-sm">SISTEMA DE CALENDARIO ESCOLAR 2026</p>
+          <p className="opacity-40 italic mt-12">Programado y diseñado por el Webmaster: Nelson Muñoz.</p>
         </div>
       </footer>
 
-      {/* PANEL DE GESTIÓN */}
+      {/* PANEL DE GESTIÓN (ADMIN) */}
       <AnimatePresence>
         {isAdminModalOpen && (
-          <div className="fixed inset-0 bg-[#1e3a8a]/60 backdrop-blur-xl z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-blue-950/80 backdrop-blur-2xl z-[300] flex items-center justify-center p-4">
             {!isAuthenticated ? (
-              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white/90 backdrop-blur-3xl rounded-[3rem] w-full max-sm p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] border border-white/50"
-              >
-                <div className="flex flex-col items-center mb-10">
-                  <div className="bg-blue-900 p-5 rounded-[1.5rem] shadow-xl mb-6 text-white"><Lock size={40} /></div>
-                  <h3 className="text-2xl font-black text-blue-950 uppercase tracking-tight text-center">Acceso Privado</h3>
-                  <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Sólo personal autorizado</p>
-                </div>
-                <form onSubmit={handleAuth} className="space-y-5">
-                  <input name="email" type="email" placeholder="usuario@iensecan.edu.co" required 
-                    className="w-full px-8 py-5 bg-slate-100 rounded-[1.5rem] outline-none focus:ring-4 focus:ring-blue-900/10 font-bold text-sm transition-all" />
-                  <input name="password" type="password" placeholder="••••••••" required 
-                    className="w-full px-8 py-5 bg-slate-100 rounded-[1.5rem] outline-none focus:ring-4 focus:ring-blue-900/10 font-bold text-sm transition-all" />
-                  <button type="submit" className="w-full bg-blue-900 text-white py-5 rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl hover:bg-blue-800 transition-all active:scale-95 text-sm">Autenticar</button>
-                  <button type="button" onClick={() => setIsAdminModalOpen(false)} className="w-full text-slate-400 font-black uppercase text-[10px] py-2 hover:text-blue-900 transition-colors">Cancelar</button>
+              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[3rem] w-full max-w-md p-12 shadow-2xl border-4 border-blue-900 text-center">
+                <Lock size={64} className="text-blue-900 mb-8 mx-auto" />
+                <h3 className="text-3xl font-black text-blue-950 uppercase mb-8 tracking-tighter">Acceso Directivo</h3>
+                <form onSubmit={(e) => { e.preventDefault(); setIsAuthenticated(true); }} className="space-y-6">
+                  <input name="email" type="email" placeholder="usuario@iensecan.edu.co" required className="w-full px-8 py-5 bg-slate-100 rounded-2xl font-bold focus:ring-4 ring-blue-500/20 outline-none transition-all" />
+                  <input name="password" type="password" placeholder="••••••••" required className="w-full px-8 py-5 bg-slate-100 rounded-2xl font-bold focus:ring-4 ring-blue-500/20 outline-none transition-all" />
+                  <button type="submit" className="w-full bg-blue-900 text-white py-6 rounded-2xl font-black uppercase text-sm shadow-2xl hover:bg-blue-800 transition-all">Ingresar al Sistema</button>
+                  <button type="button" onClick={() => setIsAdminModalOpen(false)} className="w-full text-slate-400 font-black uppercase text-[10px] py-2 hover:text-red-500 transition-colors">Volver al Calendario</button>
                 </form>
               </motion.div>
             ) : (
-              <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}
-                className="bg-white rounded-[3.5rem] w-full max-w-6xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border-4 border-blue-900"
-              >
-                <div className="bg-blue-900 p-8 text-white flex flex-col md:flex-row justify-between items-center gap-6">
-                  <div className="flex items-center gap-5">
-                    <Database className="text-[#facc15]" size={40} />
-                    <div>
-                       <h3 className="text-2xl font-black uppercase tracking-widest leading-none">SISTEMA DE GESTIÓN DE CRONOGRAMA</h3>
-                       <p className="text-[10px] font-black opacity-60 uppercase tracking-tighter mt-1">Institución Educativa Nuestra Señora de la Candelaria</p>
-                    </div>
+              <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white rounded-[4rem] w-full max-w-6xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] border-4 border-blue-900">
+                <div className="bg-blue-900 p-10 text-white flex justify-between items-center no-print">
+                  <div>
+                    <h3 className="text-3xl font-black uppercase tracking-widest flex items-center gap-4">Gestión Académica 2026</h3>
+                    <p className="text-[10px] font-bold opacity-50 uppercase mt-2 tracking-widest">Configuración de Reuniones y Actividades Oficiales</p>
                   </div>
-                  <div className="flex flex-wrap justify-center gap-3">
-                    <button onClick={() => setIsSyncModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-[1.5rem] font-black text-xs uppercase flex items-center gap-3 transition-all shadow-xl active:scale-95">
-                      <CloudUpload size={20} /> Carga Masiva (Google Sheets)
-                    </button>
-                    <button onClick={() => { setEditingEvent(null); setFormData({...formData, title: '', start: format(new Date(), 'yyyy-MM-dd'), type: 'academico'}); setIsFormOpen(true); }} 
-                      className="bg-[#facc15] hover:bg-yellow-500 text-blue-900 px-8 py-4 rounded-[1.5rem] font-black text-xs uppercase flex items-center gap-3 transition-all shadow-xl active:scale-95"
-                    >
-                      <PlusCircle size={20} /> Nueva Actividad
-                    </button>
-                    <button onClick={() => setIsAdminModalOpen(false)} className="bg-white/10 hover:bg-white/20 p-4 rounded-full transition-all"><X size={28}/></button>
+                  <div className="flex gap-4">
+                    {!isAddingNew && <button onClick={() => setIsAddingNew(true)} className="bg-[#facc15] text-blue-900 px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-3 shadow-xl hover:scale-105 transition-all"><PlusCircle size={20}/> NUEVA ACTIVIDAD</button>}
+                    <button onClick={() => setIsAdminModalOpen(false)} className="bg-white/10 hover:bg-white/20 p-4 rounded-full transition-all"><X size={32}/></button>
                   </div>
                 </div>
 
-                {syncStatus !== 'idle' && (
-                  <div className="bg-blue-50 px-10 py-4 flex items-center gap-6 border-b-2 border-blue-100">
-                    <div className="flex-grow h-4 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${syncProgress}%` }} className="h-full bg-gradient-to-r from-blue-900 via-emerald-500 to-blue-900 bg-[length:200%_100%] animate-shimmer" />
-                    </div>
-                    <div className="flex items-center gap-3">
-                       <span className="text-[11px] font-black text-blue-900 uppercase tracking-tighter">{syncStatus === 'syncing' ? `Integrando datos... ${syncProgress}%` : '¡Integración Exitosa!'}</span>
-                       {syncStatus === 'success' && <CheckCircle2 className="text-emerald-600" size={24} />}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex-grow overflow-y-auto p-10 bg-slate-50 custom-scroll">
-                  <div className="bg-white rounded-[2.5rem] border-2 border-blue-900/10 shadow-inner overflow-hidden">
-                    <table className="w-full text-left">
-                      <thead className="bg-blue-950 text-white font-black uppercase text-[10px]">
-                        <tr>
-                          <th className="p-8">Actividad / Reunión</th>
-                          <th className="p-8">Fecha y Periodo</th>
-                          <th className="p-8">Información</th>
-                          <th className="p-8 text-center">Gestión</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y-2 divide-slate-50">
-                        {events.map(ev => (
-                          <tr key={ev.id} className="hover:bg-blue-50/50 transition-colors group">
-                            <td className="p-8">
-                              <div className="font-black text-blue-900 text-sm mb-1 uppercase leading-tight">{ev.title}</div>
-                              <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase text-white ${
-                                ev.type === 'festivo' ? 'bg-red-700' : 
-                                ev.type === 'significativo' ? 'bg-purple-700' : 
-                                ev.type === 'institucional' ? 'bg-yellow-500' : 'bg-blue-700'
-                              }`}>{ev.type === 'festivo' ? 'FESTIVO NACIONAL' : ev.type}</span>
-                            </td>
-                            <td className="p-8">
-                               <div className="text-xs font-black text-slate-700 uppercase">{format(ev.start, 'dd MMM yyyy', { locale: es })}</div>
-                               <div className="text-[9px] font-bold text-slate-400 mt-1 uppercase flex items-center gap-1"><Clock size={12}/> {ev.time}</div>
-                            </td>
-                            <td className="p-8">
-                               <div className="text-xs font-bold text-slate-600 uppercase flex items-center gap-2"><MapPin size={14} className="text-blue-500"/> {ev.location}</div>
-                               <div className="text-[9px] font-bold text-slate-400 mt-1 uppercase truncate max-w-[200px]">Participan: {ev.participants}</div>
-                            </td>
-                            <td className="p-8">
-                               <div className="flex justify-center gap-3">
-                                  <button onClick={() => setEditingEvent(ev)} className="bg-blue-50 text-blue-600 p-4 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-90">
-                                    <Edit3 size={20} />
-                                  </button>
-                                  <button onClick={() => setEvents(prev => prev.filter(e => e.id !== ev.id))} className="bg-red-50 text-red-600 p-4 rounded-2xl hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-90">
-                                    <Trash2 size={20} />
-                                  </button>
-                               </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="bg-slate-100 p-10 flex flex-col md:flex-row justify-between items-center gap-8 border-t-2 border-blue-100">
-                  <div className="flex items-center gap-4">
-                     <div className="bg-white p-3 rounded-2xl shadow-sm border border-blue-100"><RefreshCw className="text-blue-500" size={20} /></div>
-                     <div className="text-[10px] font-bold text-slate-500 italic uppercase">Estado: Conexión Activa | Actividades Totales: {events.length}</div>
-                  </div>
-                  <button onClick={logout} className="w-full md:w-auto bg-red-600 text-white px-12 py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-4 hover:bg-red-700 transition-all shadow-2xl active:scale-95">
-                    <Save size={24} /> Guardar y Cerrar Sesión
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL PARA CARGA MASIVA - SOLICITUD DE ID */}
-      <AnimatePresence>
-        {isSyncModalOpen && (
-          <div className="fixed inset-0 bg-blue-950/80 backdrop-blur-2xl z-[200] flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}
-              className="bg-white rounded-[3.5rem] w-full max-w-lg p-12 border-4 border-emerald-500 shadow-2xl"
-            >
-              <div className="flex flex-col items-center text-center mb-10">
-                <div className="bg-emerald-100 p-6 rounded-[2rem] text-emerald-600 mb-6 shadow-lg"><CloudUpload size={48}/></div>
-                <h4 className="text-2xl font-black text-blue-950 uppercase tracking-tighter">Carga Masiva desde Google Sheets</h4>
-                <p className="text-[10px] font-black text-slate-400 mt-2 uppercase tracking-widest">Sincronización de nuevas actividades escolares</p>
-              </div>
-
-              <div className="space-y-6">
-                 <div className="space-y-3">
-                    <label className="text-[11px] font-black uppercase text-blue-900 ml-6 tracking-widest">ID del Archivo de Google Sheets</label>
-                    <div className="relative">
-                      <Link2 className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
-                      <input 
-                        type="text" 
-                        placeholder="Ej: 1jFULHoolKxRtE7fPmNOh8uCI..." 
-                        value={inputSheetId}
-                        onChange={(e) => setInputSheetId(e.target.value)}
-                        className="w-full p-6 pl-16 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-bold text-sm outline-none focus:border-emerald-500 transition-all shadow-inner"
-                      />
-                    </div>
-                 </div>
-
-                 <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100">
-                    <div className="flex items-start gap-4">
-                       <Info size={20} className="text-blue-500 mt-1 flex-shrink-0" />
-                       <div className="text-[10px] font-bold text-slate-600 leading-relaxed uppercase">
-                          Encuentra el ID en la URL de tu navegador entre <span className="text-blue-900 font-black">/d/</span> y <span className="text-blue-900 font-black">/edit</span>. El archivo debe ser de acceso público o compartido con la cuenta institucional.
-                       </div>
-                    </div>
-                 </div>
-
-                 <div className="flex gap-4 pt-6">
-                    <button 
-                      onClick={handleBulkUpload}
-                      className="flex-1 bg-emerald-600 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs hover:bg-emerald-700 transition-all shadow-xl active:scale-95"
-                    >
-                      Iniciar Integración
-                    </button>
-                    <button 
-                      onClick={() => { setIsSyncModalOpen(false); setInputSheetId(''); }}
-                      className="px-10 bg-slate-100 text-slate-400 py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs hover:bg-slate-200 transition-all"
-                    >
-                      Cancelar
-                    </button>
-                 </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* FORMULARIO DE EDICIÓN / REGISTRO INDIVIDUAL */}
-      <AnimatePresence>
-        {isFormOpen && (
-          <div className="fixed inset-0 bg-blue-950/90 backdrop-blur-2xl z-[150] flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 30 }}
-              className="bg-white rounded-[4rem] w-full max-w-2xl p-16 border-4 border-[#facc15] shadow-[0_0_100px_rgba(250,204,21,0.2)] overflow-y-auto max-h-[95vh] custom-scroll"
-            >
-              <div className="flex justify-between items-center mb-12">
-                <div className="flex items-center gap-6">
-                   <div className="bg-blue-100 p-5 rounded-[2rem] text-blue-900 shadow-xl"><PlusCircle size={40} /></div>
-                   <div>
-                      <h4 className="text-3xl font-black uppercase text-blue-950 tracking-tighter leading-none">{editingEvent ? 'Modificar Actividad' : 'Nueva Actividad'}</h4>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Sincronización individual en tiempo real</p>
-                   </div>
-                </div>
-                <button onClick={() => { setIsFormOpen(false); setEditingEvent(null); }} className="text-slate-300 hover:text-red-600 transition-all active:scale-90"><X size={48}/></button>
-              </div>
-
-              <form onSubmit={handleSaveEvent} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="md:col-span-2 space-y-3">
-                  <label className="text-[11px] font-black uppercase text-blue-900 ml-6 tracking-widest">Actividad / Reunión / Día Especial</label>
-                  <input type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required 
-                    className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-black uppercase text-sm focus:border-blue-900 focus:bg-white outline-none transition-all shadow-inner" />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase text-blue-900 ml-6 tracking-widest">Fecha Inicio</label>
-                  <input type="date" value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} required className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-black text-sm outline-none focus:border-blue-900" />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase text-blue-900 ml-6 tracking-widest">Fecha Final</label>
-                  <input type="date" value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} required className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-black text-sm outline-none focus:border-blue-900" />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase text-blue-900 ml-6 tracking-widest">Hora</label>
-                  <input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} required className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-black text-sm outline-none focus:border-blue-900" />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase text-blue-900 ml-6 tracking-widest">Tipo de Categoría</label>
-                  <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as EventType})} className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-black text-sm uppercase outline-none focus:border-blue-900 appearance-none">
-                    <option value="academico">Académico</option>
-                    <option value="institucional">Institucional</option>
-                    <option value="festivo">Festivo Nacional</option>
-                    <option value="vacaciones">Receso / Vacaciones</option>
-                    <option value="significativo">Fecha Especial / Hito</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2 space-y-3">
-                   <label className="text-[11px] font-black uppercase text-blue-900 ml-6 tracking-widest">Ubicación / Lugar</label>
-                   <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-black text-sm outline-none focus:border-blue-900 shadow-inner" placeholder="Ej: Aula Máxima / Biblioteca" />
-                </div>
-                <div className="md:col-span-2 space-y-3">
-                   <label className="text-[11px] font-black uppercase text-blue-900 ml-6 tracking-widest">Personal / Estudiantes Participantes</label>
-                   <input type="text" value={formData.participants} onChange={e => setFormData({...formData, participants: e.target.value})} className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] font-black text-sm outline-none focus:border-blue-900 shadow-inner" placeholder="Ej: Todos los grados / Docentes de Área" />
-                </div>
-                <div className="md:col-span-2 space-y-3">
-                   <label className="text-[11px] font-black uppercase text-blue-900 ml-6 tracking-widest">Observaciones y Detalles</label>
-                   <textarea rows={3} value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} className="w-full p-8 bg-slate-50 border-2 border-slate-100 rounded-[3rem] font-bold text-sm outline-none focus:border-blue-900 shadow-inner custom-scroll" placeholder="Detalles específicos..." />
-                </div>
-                <div className="md:col-span-2 pt-10">
-                  <button type="submit" className="w-full bg-blue-900 text-white py-8 rounded-[2.5rem] font-black uppercase tracking-[0.3em] text-xl shadow-[0_30px_60px_-10px_rgba(30,58,138,0.5)] hover:bg-blue-800 transition-all active:scale-95 flex items-center justify-center gap-6">
-                    <Save size={32} /> {editingEvent ? 'Actualizar Cambios' : 'Sincronizar Cambios'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* DETALLES DE DÍA (POPUP) */}
-      <AnimatePresence>
-        {selectedDayEvents && (
-          <div className="fixed inset-0 bg-blue-950/60 backdrop-blur-md z-[120] flex items-center justify-center p-4">
-             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-               className="bg-white rounded-[4rem] w-full max-w-xl shadow-[0_50px_100px_-20px_rgba(0,0,0,0.4)] overflow-hidden border-4 border-blue-900"
-             >
-                <div className={`p-10 text-white flex justify-between items-center relative overflow-hidden ${
-                  isFeb2(selectedDayEvents.date) ? 'bg-amber-600' :
-                  selectedDayEvents.events.some(e => e.type === 'festivo') ? 'bg-red-800' : 
-                  selectedDayEvents.events.some(e => e.type === 'significativo') ? 'bg-purple-900' : 'bg-blue-900'
-                }`}>
-                  <div className="relative z-10">
-                    <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">{format(selectedDayEvents.date, 'dd MMMM', { locale: es })}</h4>
-                    <p className="text-[11px] font-black uppercase opacity-60 tracking-[0.3em] mt-2">{format(selectedDayEvents.date, 'EEEE', { locale: es })}</p>
-                  </div>
-                  <button onClick={() => setSelectedDayEvents(null)} className="relative z-10 bg-white/20 p-4 rounded-full hover:bg-white/30 transition-all active:scale-90"><X size={32}/></button>
-                  <CalendarIcon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 opacity-10 pointer-events-none" />
-                </div>
-                <div className="p-10 space-y-8 max-h-[65vh] overflow-y-auto custom-scroll bg-blue-50/20">
-                  {selectedDayEvents.events.length > 0 ? selectedDayEvents.events.map(e => (
-                    <div key={e.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border-2 border-blue-50 relative group">
-                      <span className={`absolute top-6 right-8 text-[8px] font-black px-3 py-1 rounded-full uppercase text-white ${
-                        e.type === 'festivo' ? 'bg-red-700' : 
-                        e.type === 'significativo' ? 'bg-purple-700' : 
-                        e.type === 'institucional' ? 'bg-yellow-500' : 'bg-blue-700'
-                      }`}>{e.type === 'festivo' ? 'FESTIVO NACIONAL' : e.type}</span>
-                      <h5 className="text-2xl font-black text-blue-950 uppercase leading-tight mb-6 pr-12">{e.title}</h5>
-                      <div className="grid grid-cols-2 gap-y-6 gap-x-8 text-[11px] font-bold text-slate-500">
-                        <div className="flex flex-col gap-1">
-                           <span className="text-[8px] font-black uppercase opacity-50 tracking-widest flex items-center gap-1"><Clock size={10}/> Periodo</span>
-                           <span className="text-blue-900">{format(e.start, 'dd/MM/yy')} - {format(e.end, 'dd/MM/yy')}</span>
+                <div className="flex-grow overflow-y-auto p-12 bg-slate-50 custom-scroll">
+                  {isAddingNew ? (
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[3.5rem] p-12 shadow-2xl border-4 border-blue-50 max-w-4xl mx-auto">
+                        <div className="flex items-center gap-4 mb-10 pb-6 border-b border-slate-100">
+                            <Edit3 className="text-blue-900" size={32} />
+                            <h4 className="text-2xl font-black uppercase text-blue-950">Formulario de Actividades (7 Ítems)</h4>
                         </div>
-                        <div className="flex flex-col gap-1">
-                           <span className="text-[8px] font-black uppercase opacity-50 tracking-widest flex items-center gap-1"><Clock size={10}/> Hora</span>
-                           <span className="text-blue-900">{e.time}</span>
+                        <form onSubmit={handleSaveEvent} className="space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-2 col-span-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">REUNIONES / ACTIVIDADES (TÍTULO)</label>
+                                    <input value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Ej: Entrega de Reportes I Trimestre" required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none uppercase" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">TIPO DE ACTIVIDAD</label>
+                                    <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as EventType})} className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none">
+                                      <option value="academico">ACADÉMICO</option>
+                                      <option value="institucional">INSTITUCIONAL (SDI)</option>
+                                      <option value="efemeride">EFEMÉRIDE</option>
+                                      <option value="significativo">SIGNIFICATIVO</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">FECHA</label>
+                                    <input type="date" value={formData.start} onChange={e => handleDateChange(e.target.value)} required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">DIA (CALCULADO)</label>
+                                    <input value={formData.day} readOnly className="w-full px-8 py-5 bg-slate-200 rounded-3xl font-black text-blue-400 outline-none uppercase cursor-not-allowed" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">HORA</label>
+                                    <input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">LUGAR</label>
+                                    <input value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="Ej: Auditorio Sede Nelson Muñoz" required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none uppercase" />
+                                </div>
+                                <div className="space-y-2 col-span-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">PARTICIPANTES</label>
+                                    <input value={formData.participants} onChange={e => setFormData({...formData, participants: e.target.value})} placeholder="Ej: Docentes, Directivos y Padres de Familia" required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none uppercase" />
+                                </div>
+                                <div className="space-y-2 col-span-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">OBSERVACIONES</label>
+                                    <textarea value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} placeholder="Detalles, requisitos, material a traer..." className="w-full px-8 py-6 bg-slate-100 rounded-[2.5rem] font-medium text-slate-700 outline-none min-h-[150px]" />
+                                </div>
+                            </div>
+                            <div className="flex gap-6 pt-10 border-t border-slate-100">
+                                <button type="submit" className="flex-grow bg-blue-900 text-white py-6 rounded-3xl font-black uppercase text-sm shadow-2xl hover:bg-blue-800 transition-all flex items-center justify-center gap-3"><Save size={20}/> GUARDAR ACTIVIDAD</button>
+                                <button type="button" onClick={() => setIsAddingNew(false)} className="px-12 bg-slate-200 text-slate-500 py-6 rounded-3xl font-black uppercase text-sm hover:bg-slate-300 transition-all">Cancelar</button>
+                            </div>
+                        </form>
+                    </motion.div>
+                  ) : (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 gap-4">
+                            {events.sort((a,b) => a.start.getTime() - b.start.getTime()).map(ev => (
+                                <div key={ev.id} className="bg-white p-8 rounded-[2.5rem] border-2 border-slate-100 flex items-center justify-between hover:border-blue-400 transition-all group shadow-sm">
+                                    <div className="flex items-center gap-8">
+                                        <div className="min-w-[120px] text-center border-r-2 border-slate-50 pr-8">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase leading-none">{format(ev.start, 'MMM', { locale: es })}</p>
+                                            <p className="text-3xl font-black text-blue-900 leading-none my-1">{format(ev.start, 'dd')}</p>
+                                            <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest">{ev.day}</p>
+                                        </div>
+                                        <div>
+                                            <h6 className="text-xl font-black text-blue-950 uppercase leading-tight group-hover:text-blue-600 transition-colors">{ev.title}</h6>
+                                            <div className="flex flex-wrap gap-4 mt-3 text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                                                <span className="flex items-center gap-1"><Clock size={12}/> {ev.time}</span>
+                                                <span className="flex items-center gap-1"><MapPin size={12}/> {ev.location}</span>
+                                                <span className={`flex items-center gap-1 ${ev.type === 'efemeride' ? 'text-violet-500' : isPatronDay(ev.start) ? 'text-yellow-600' : ''}`}><Users size={12}/> {ev.type === 'efemeride' ? 'Comunidad Global' : isPatronDay(ev.start) ? 'Todo Candelaria' : ev.participants?.split(',')[0]}...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button onClick={() => { setEditingEvent(ev); setFormData({...ev, start: format(ev.start, 'yyyy-MM-dd')}); setIsAddingNew(true); }} className="bg-blue-50 text-blue-600 p-4 rounded-2xl hover:bg-blue-100 transition-all"><Edit3 size={20}/></button>
+                                        <button onClick={() => setEvents(prev => prev.filter(e => e.id !== ev.id))} className="bg-red-50 text-red-600 p-4 rounded-2xl hover:bg-red-100 transition-all"><Trash2 size={20}/></button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        <div className="flex flex-col gap-1">
-                           <span className="text-[8px] font-black uppercase opacity-50 tracking-widest flex items-center gap-1"><MapPin size={10}/> Lugar</span>
-                           <span className="text-slate-800">{e.location}</span>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                           <span className="text-[8px] font-black uppercase opacity-50 tracking-widest flex items-center gap-1"><Users size={10}/> Participan</span>
-                           <span className="text-slate-800">{e.participants}</span>
-                        </div>
-                      </div>
-                      <div className="mt-8 pt-6 border-t border-slate-100">
-                        <span className="text-[8px] font-black uppercase opacity-50 tracking-widest mb-2 block">Observaciones</span>
-                        <p className="text-xs italic text-slate-600 bg-slate-50 p-4 rounded-2xl leading-relaxed">{e.observations || 'Sin observaciones adicionales registradas.'}</p>
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="text-center py-20">
-                       <CalendarIcon size={64} className="mx-auto text-blue-100 mb-6" />
-                       <p className="text-slate-300 font-black uppercase tracking-widest text-lg">Sin actividades programadas</p>
                     </div>
                   )}
                 </div>
-                <div className="p-8 bg-white border-t-2 border-blue-50">
-                   <button onClick={() => setSelectedDayEvents(null)} className="w-full bg-blue-900 text-white py-6 rounded-[2rem] font-black uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all">Regresar al Calendario</button>
-                </div>
-             </motion.div>
+              </motion.div>
+            )}
           </div>
         )}
       </AnimatePresence>

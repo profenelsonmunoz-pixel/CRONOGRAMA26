@@ -6,6 +6,7 @@ export const COLORS = {
   secondary: '#facc15', // Amarillo Institucional
   accent: '#10b981', // Verde éxito
   nonWorking: '#FF4500', // Rojo Anaranjado para números
+  efemeride: '#8b5cf6', // Violeta para efemérides
 };
 
 export const MONTH_NAMES = [
@@ -17,74 +18,102 @@ export const DAY_NAMES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 export const INITIAL_EVENTS: CalendarEvent[] = [
   // --- FESTIVOS OFICIALES COLOMBIA 2026 ---
-  { id: 'f1', title: 'Año Nuevo', start: new Date(2026, 0, 1), end: new Date(2026, 0, 1), type: 'festivo', location: 'Nacional' },
-  { id: 'f2', title: 'Día de los Reyes Magos', start: new Date(2026, 0, 12), end: new Date(2026, 0, 12), type: 'festivo', location: 'Nacional' },
-  { id: 'f3', title: 'Día de San José', start: new Date(2026, 2, 23), end: new Date(2026, 2, 23), type: 'festivo', location: 'Nacional' },
-  { id: 'f4', title: 'Jueves Santo', start: new Date(2026, 3, 2), end: new Date(2026, 3, 2), type: 'festivo', location: 'Nacional' },
-  { id: 'f5', title: 'Viernes Santo', start: new Date(2026, 3, 3), end: new Date(2026, 3, 3), type: 'festivo', location: 'Nacional' },
-  { id: 'f6', title: 'Día del Trabajo', start: new Date(2026, 4, 1), end: new Date(2026, 4, 1), type: 'festivo', location: 'Nacional' },
-  { id: 'f7', title: 'Ascensión del Señor', start: new Date(2026, 4, 18), end: new Date(2026, 4, 18), type: 'festivo', location: 'Nacional' },
-  { id: 'f8', title: 'Corpus Christi', start: new Date(2026, 5, 8), end: new Date(2026, 5, 8), type: 'festivo', location: 'Nacional' },
-  { id: 'f9', title: 'Sagrado Corazón de Jesús', start: new Date(2026, 5, 15), end: new Date(2026, 5, 15), type: 'festivo', location: 'Nacional' },
-  { id: 'f10', title: 'San Pedro y San Pablo', start: new Date(2026, 5, 29), end: new Date(2026, 5, 29), type: 'festivo', location: 'Nacional' },
-  { id: 'f11', title: 'Grito de Independencia', start: new Date(2026, 6, 20), end: new Date(2026, 6, 20), type: 'festivo', location: 'Nacional' },
-  { id: 'f12', title: 'Batalla de Boyacá', start: new Date(2026, 7, 7), end: new Date(2026, 7, 7), type: 'festivo', location: 'Nacional' },
-  { id: 'f13', title: 'Asunción de la Virgen', start: new Date(2026, 7, 17), end: new Date(2026, 7, 17), type: 'festivo', location: 'Nacional' },
-  { id: 'f14', title: 'Día de la Raza', start: new Date(2026, 9, 12), end: new Date(2026, 9, 12), type: 'festivo', location: 'Nacional' },
-  { id: 'f15', title: 'Todos los Santos', start: new Date(2026, 10, 2), end: new Date(2026, 10, 2), type: 'festivo', location: 'Nacional' },
-  { id: 'f16', title: 'Independencia de Cartagena', start: new Date(2026, 10, 16), end: new Date(2026, 10, 16), type: 'festivo', location: 'Nacional' },
-  { id: 'f17', title: 'Inmaculada Concepción', start: new Date(2026, 11, 8), end: new Date(2026, 11, 8), type: 'festivo', location: 'Nacional' },
-  { id: 'f18', title: 'Navidad', start: new Date(2026, 11, 25), end: new Date(2026, 11, 25), type: 'festivo', location: 'Nacional' },
+  { id: 'f1', title: 'Año Nuevo', start: new Date(2026, 0, 1), end: new Date(2026, 0, 1), type: 'festivo', location: 'Nacional', observations: 'Festivo nacional de inicio de año civil.' },
+  { id: 'f2', title: 'Día de los Reyes Magos', start: new Date(2026, 0, 12), end: new Date(2026, 0, 12), type: 'festivo', location: 'Nacional', observations: 'Traslado del festivo de Reyes según Ley Emiliani.' },
+  { id: 'f3', title: 'Día de San José', start: new Date(2026, 2, 23), end: new Date(2026, 2, 23), type: 'festivo', location: 'Nacional', observations: 'Homenaje a San José.' },
+  { id: 'f4', title: 'Jueves Santo', start: new Date(2026, 3, 2), end: new Date(2026, 3, 2), type: 'festivo', location: 'Nacional', observations: 'Día de reflexión.' },
+  { id: 'f5', title: 'Viernes Santo', start: new Date(2026, 3, 3), end: new Date(2026, 3, 3), type: 'festivo', location: 'Nacional', observations: 'Día de recogimiento.' },
+  { id: 'f6', title: 'Día del Trabajo', start: new Date(2026, 4, 1), end: new Date(2026, 4, 1), type: 'festivo', location: 'Nacional', observations: 'Conmemoración del trabajo.' },
+  { id: 'f7', title: 'Ascensión del Señor', start: new Date(2026, 4, 18), end: new Date(2026, 4, 18), type: 'festivo', location: 'Nacional', observations: 'Festivo religioso trasladado.' },
+  { id: 'f8', title: 'Corpus Christi', start: new Date(2026, 5, 8), end: new Date(2026, 5, 8), type: 'festivo', location: 'Nacional', observations: 'Celebración religiosa.' },
+  { id: 'f9', title: 'Sagrado Corazón de Jesús', start: new Date(2026, 5, 15), end: new Date(2026, 5, 15), type: 'festivo', location: 'Nacional', observations: 'Festivo religioso trasladado.' },
+  { id: 'f10', title: 'San Pedro y San Pablo', start: new Date(2026, 5, 29), end: new Date(2026, 5, 29), type: 'festivo', location: 'Nacional', observations: 'Homenaje a los apóstoles.' },
+  { id: 'f11', title: 'Grito de Independencia', start: new Date(2026, 6, 20), end: new Date(2026, 6, 20), type: 'festivo', location: 'Nacional', observations: 'Soberanía nacional de Colombia.' },
+  { id: 'f12', title: 'Batalla de Boyacá', start: new Date(2026, 7, 7), end: new Date(2026, 7, 7), type: 'festivo', location: 'Nacional', observations: 'Triunfo de la independencia.' },
+  { id: 'f13', title: 'Asunción de la Virgen', start: new Date(2026, 7, 17), end: new Date(2026, 7, 17), type: 'festivo', location: 'Nacional', observations: 'Festivo religioso.' },
+  { id: 'f14', title: 'Día de la Raza', start: new Date(2026, 9, 12), end: new Date(2026, 9, 12), type: 'festivo', location: 'Nacional', observations: 'Respeto a la Diversidad Cultural.' },
+  { id: 'f15', title: 'Todos los Santos', start: new Date(2026, 10, 2), end: new Date(2026, 10, 2), type: 'festivo', location: 'Nacional', observations: 'Homenaje a los santos.' },
+  { id: 'f16', title: 'Independencia de Cartagena', start: new Date(2026, 10, 16), end: new Date(2026, 10, 16), type: 'festivo', location: 'Nacional', observations: 'Gesta heróica.' },
+  { id: 'f17', title: 'Inmaculada Concepción', start: new Date(2026, 11, 8), end: new Date(2026, 11, 8), type: 'festivo', location: 'Nacional', observations: 'Día de las velitas.' },
+  { id: 'f18', title: 'Navidad', start: new Date(2026, 11, 25), end: new Date(2026, 11, 25), type: 'festivo', location: 'Nacional', observations: 'Nacimiento de Jesús.' },
 
-  // --- CELEBRACIONES Y DÍAS ESPECIALES INSTITUCIONALES ---
-  { id: 's0', title: 'DÍA DE LA VIRGEN DE LA CANDELARIA (PATRONA)', start: new Date(2026, 1, 2), end: new Date(2026, 1, 2), type: 'significativo', location: 'Sedes IENSECAN', description: 'Celebración principal de nuestra institución.' },
-  { id: 's1', title: 'Día de la Paz y la No Violencia', start: new Date(2026, 0, 30), end: new Date(2026, 0, 30), type: 'significativo', location: 'Institucional' },
-  { id: 's3', title: 'Día Internacional de la Mujer', start: new Date(2026, 2, 8), end: new Date(2026, 2, 8), type: 'significativo', location: 'Internacional' },
-  { id: 's8', title: 'Día del Idioma Español', start: new Date(2026, 3, 23), end: new Date(2026, 3, 23), type: 'significativo', location: 'Sedes Educativas' },
-  { id: 's9', title: 'Día del Maestro', start: new Date(2026, 4, 15), end: new Date(2026, 4, 15), type: 'significativo', location: 'Colombia' },
-  { id: 's11', title: 'Día del Estudiante', start: new Date(2026, 5, 8), end: new Date(2026, 5, 8), type: 'significativo', location: 'Colombia' },
-  { id: 's13', title: 'Día del Amor y la Amistad', start: new Date(2026, 8, 19), end: new Date(2026, 8, 19), type: 'significativo', location: 'Colombia' },
+  // --- EFEMÉRIDES UNESCO / ONU / COLOMBIA ---
+  { id: 'e1', title: 'Día Internacional de la Mujer y la Niña en la Ciencia', start: new Date(2026, 1, 11), end: new Date(2026, 1, 11), type: 'efemeride', observations: 'UNESCO: Promover el acceso y la participación plena en la ciencia.' },
+  { id: 'e2', title: 'Día Internacional de la Lengua Materna', start: new Date(2026, 1, 21), end: new Date(2026, 1, 21), type: 'efemeride', observations: 'Preservar la diversidad lingüística mundial.' },
+  { id: 'e3', title: 'Día Internacional de la Mujer', start: new Date(2026, 2, 8), end: new Date(2026, 2, 8), type: 'efemeride', observations: 'Lucha por la igualdad, el reconocimiento y ejercicio de derechos.' },
+  { id: 'e4', title: 'Día Mundial del Agua', start: new Date(2026, 2, 22), end: new Date(2026, 2, 22), type: 'efemeride', observations: 'ONU: Concienciar sobre la importancia del agua dulce.' },
+  { id: 'e5', title: 'Día Mundial de la Salud', start: new Date(2026, 3, 7), end: new Date(2026, 3, 7), type: 'efemeride', observations: 'Aniversario de la creación de la OMS.' },
+  { id: 'e6', title: 'Día Internacional de la Madre Tierra', start: new Date(2026, 3, 22), end: new Date(2026, 3, 22), type: 'efemeride', observations: 'Fomentar la armonía con la naturaleza.' },
+  { id: 'e7', title: 'Día del Idioma Español / Día Mundial del Libro', start: new Date(2026, 3, 23), end: new Date(2026, 3, 23), type: 'efemeride', observations: 'Homenaje a Miguel de Cervantes y la literatura universal.' },
+  { id: 'e8', title: 'Día del Maestro (Colombia)', start: new Date(2026, 4, 15), end: new Date(2026, 4, 15), type: 'efemeride', observations: 'Homenaje a San Juan Bautista de La Salle, patrono de los educadores.' },
+  { id: 'e9', title: 'Día de la Afrocolombianidad', start: new Date(2026, 4, 21), end: new Date(2026, 4, 21), type: 'efemeride', observations: 'Conmemoración de la abolición de la esclavitud en Colombia.' },
+  { id: 'e10', title: 'Día Mundial del Medio Ambiente', start: new Date(2026, 5, 5), end: new Date(2026, 5, 5), type: 'efemeride', observations: 'Acción global por la protección del planeta.' },
+  { id: 'e11', title: 'Día Mundial de los Océanos', start: new Date(2026, 5, 8), end: new Date(2026, 5, 8), type: 'efemeride', observations: 'Recordar el papel de los océanos en la vida cotidiana.' },
+  { id: 'e12', title: 'Día Internacional de la Juventud', start: new Date(2026, 7, 12), end: new Date(2026, 7, 12), type: 'efemeride', observations: 'Empoderar a los jóvenes en la sociedad.' },
+  { id: 'e13', title: 'Día Internacional de la Alfabetización', start: new Date(2026, 8, 8), end: new Date(2026, 8, 8), type: 'efemeride', observations: 'UNESCO: La alfabetización como derecho humano.' },
+  { id: 'e14', title: 'Día Internacional de la Paz', start: new Date(2026, 8, 21), end: new Date(2026, 8, 21), type: 'efemeride', observations: 'Fortalecer los ideales de paz en el mundo.' },
+  { id: 'e15', title: 'Día Mundial de los Docentes', start: new Date(2026, 9, 5), end: new Date(2026, 9, 5), type: 'efemeride', observations: 'Homenaje a la labor docente global.' },
+  { id: 'e16', title: 'Día Mundial del Niño', start: new Date(2026, 10, 20), end: new Date(2026, 10, 20), type: 'efemeride', observations: 'Aniversario de la Declaración de los Derechos del Niño.' },
+  { id: 'e17', title: 'Día de los Derechos Humanos', start: new Date(2026, 11, 10), end: new Date(2026, 11, 10), type: 'efemeride', observations: 'Aniversario de la Declaración Universal de DDHH.' },
 
-  // --- HITOS TECNOLÓGICOS Y ANIVERSARIOS (RESTORED) ---
-  { id: 't1', title: 'CES 2026', start: new Date(2026, 0, 6), end: new Date(2026, 0, 9), type: 'significativo', location: 'Las Vegas', description: 'La mayor feria de tecnología de consumo del mundo.' },
-  { id: 't2', title: '25.º Aniversario de Wikipedia', start: new Date(2026, 0, 15), end: new Date(2026, 0, 15), type: 'significativo', location: 'Global', description: 'Un cuarto de siglo de la enciclopedia colaborativa global.' },
-  { id: 't3', title: 'Día del Community Manager', start: new Date(2026, 0, 26), end: new Date(2026, 0, 26), type: 'significativo', location: 'Global', description: 'Homenaje a los profesionales que gestionan comunidades digitales.' },
-  { id: 't4', title: 'Día de la Mujer y la Niña en la Ciencia', start: new Date(2026, 1, 11), end: new Date(2026, 1, 11), type: 'significativo', location: 'Global', description: 'Promover la igualdad de género en la investigación.' },
-  { id: 't5', title: 'MWC Barcelona', start: new Date(2026, 2, 2), end: new Date(2026, 2, 5), type: 'significativo', location: 'Barcelona', description: '20.º aniversario del evento; foco en 6G e IA.' },
-  { id: 't6', title: 'Centenario del Cohete de Goddard', start: new Date(2026, 2, 16), end: new Date(2026, 2, 16), type: 'significativo', location: 'Global', description: '100 años del hito que permitió satélites e internet.' },
-  { id: 't7', title: '20.º Aniversario de Twitter (X)', start: new Date(2026, 2, 21), end: new Date(2026, 2, 21), type: 'significativo', location: 'Global', description: 'Dos décadas desde el inicio de la era del microblogging.' },
-  { id: 't8', title: '20.º Aniversario de Spotify', start: new Date(2026, 3, 23), end: new Date(2026, 3, 23), type: 'significativo', location: 'Global', description: 'Plataforma que transformó la industria musical.' },
-  { id: 't9', title: 'Google Cloud Next', start: new Date(2026, 3, 9), end: new Date(2026, 3, 11), type: 'significativo', location: 'Google', description: 'Innovaciones en infraestructura de nube e IA.' },
-  { id: 't10', title: 'Día de las Niñas en las TIC', start: new Date(2026, 3, 23), end: new Date(2026, 3, 23), type: 'significativo', location: 'Global', description: 'Fomento de vocaciones en telecomunicaciones.' },
-  { id: 't11', title: 'Día de Internet', start: new Date(2026, 4, 17), end: new Date(2026, 4, 17), type: 'significativo', location: 'Global', description: 'Celebración global de las telecomunicaciones.' },
-  { id: 't12', title: 'South Summit', start: new Date(2026, 5, 3), end: new Date(2026, 5, 5), type: 'significativo', location: 'Madrid', description: 'Encuentro de emprendimiento y startups.' },
-  { id: 't13', title: '30.º Aniversario de Hotmail', start: new Date(2026, 6, 4), end: new Date(2026, 6, 4), type: 'significativo', location: 'Global', description: 'Tres décadas del primer correo web masivo gratuito.' },
-  { id: 't14', title: 'Día del Internauta', start: new Date(2026, 7, 23), end: new Date(2026, 7, 23), type: 'significativo', location: 'Global', description: 'Conmemora la World Wide Web pública.' },
-  { id: 't15', title: '20.º Aniversario de Roblox', start: new Date(2026, 8, 1), end: new Date(2026, 8, 1), type: 'significativo', location: 'Global', description: 'Precursor del metaverso moderno.' },
-  { id: 't16', title: 'Día del Programador', start: new Date(2026, 8, 13), end: new Date(2026, 8, 13), type: 'significativo', location: 'Global', description: 'Homenaje a quienes crean el código (Día 256).' },
-  { id: 't17', title: 'Día de Ada Lovelace', start: new Date(2026, 9, 13), end: new Date(2026, 9, 13), type: 'significativo', location: 'Global', description: 'Reconocimiento a logros de mujeres en STEM.' },
-  { id: 't18', title: '25.º Aniversario de Windows XP', start: new Date(2026, 9, 25), end: new Date(2026, 9, 25), type: 'significativo', location: 'Global', description: 'Un cuarto de siglo del icónico sistema operativo.' },
-  { id: 't19', title: '30.º Aniversario de ICQ', start: new Date(2026, 10, 15), end: new Date(2026, 10, 15), type: 'significativo', location: 'Global', description: 'Popularizó el chat en tiempo real.' },
-  { id: 't20', title: '20.º Aniversario de Nintendo Wii', start: new Date(2026, 10, 19), end: new Date(2026, 10, 19), type: 'significativo', location: 'Global', description: 'Revolucionó el control por movimiento.' },
-  { id: 't21', title: 'Web Summit', start: new Date(2026, 10, 2), end: new Date(2026, 10, 5), type: 'significativo', location: 'Lisboa', description: 'Conferencia tecnológica más influyente de Europa.' },
-  { id: 't22', title: 'Día de la Seguridad Informática', start: new Date(2026, 10, 30), end: new Date(2026, 10, 30), type: 'significativo', location: 'Global', description: 'Concienciación sobre ciberseguridad.' },
+  // --- CELEBRACIONES INSTITUCIONALES ---
+  { id: 's0', title: 'VIRGEN DE LA CANDELARIA (PATRONA)', start: new Date(2026, 1, 2), end: new Date(2026, 1, 2), type: 'significativo', location: 'Candelaria', description: 'Festividad patronal central de la IENSECAN.' },
 
-  // --- DESARROLLO INSTITUCIONAL (SDI) ---
-  { id: 'sdi1', title: 'Semana de Desarrollo Institucional 1', start: new Date(2026, 0, 12), end: new Date(2026, 0, 16), type: 'institucional', location: 'Sede Principal' },
-  { id: 'sdi2', title: 'Semana de Desarrollo Institucional 2', start: new Date(2026, 0, 19), end: new Date(2026, 0, 23), type: 'institucional', location: 'Sede Principal' },
-  { id: 'sdi3', title: 'Semana de Desarrollo Institucional - Semana Santa', start: new Date(2026, 2, 30), end: new Date(2026, 3, 3), type: 'institucional', location: 'Trabajo Institucional' },
-  { id: 'sdi4', title: 'Semana de Desarrollo Institucional - Receso Octubre', start: new Date(2026, 9, 5), end: new Date(2026, 9, 9), type: 'institucional', location: 'Trabajo Institucional' },
-  { id: 'sdi5', title: 'Semana de Desarrollo Institucional - Final de Año', start: new Date(2026, 11, 7), end: new Date(2026, 11, 11), type: 'institucional', location: 'Sede Principal' },
+  // --- SEMANAS DE DESARROLLO INSTITUCIONAL (SDI) ---
+  { id: 'sdi_init_start', title: 'INICIO SDI (PLANEACIÓN)', start: new Date(2026, 0, 12), end: new Date(2026, 0, 12), type: 'institucional', location: 'IENSECAN', description: 'Apertura de planeación 2026.' },
+  { id: 'sdi_init_end', title: 'FINAL SDI (PLANEACIÓN)', start: new Date(2026, 0, 23), end: new Date(2026, 0, 23), type: 'institucional', location: 'IENSECAN', description: 'Cierre de bloque de planeación inicial.' },
+  { id: 'sdi_ss_start', title: 'INICIO SDI (SEMANA SANTA)', start: new Date(2026, 2, 30), end: new Date(2026, 2, 30), type: 'institucional', location: 'IENSECAN', description: 'Inicio jornada técnica de abril.' },
+  { id: 'sdi_ss_end', title: 'FINAL SDI (SEMANA SANTA)', start: new Date(2026, 3, 3), end: new Date(2026, 3, 3), type: 'institucional', location: 'IENSECAN', description: 'Fin jornada técnica de abril.' },
+  { id: 'sdi_oct_start', title: 'INICIO SDI (RECESO OCTUBRE)', start: new Date(2026, 9, 5), end: new Date(2026, 9, 5), type: 'institucional', location: 'IENSECAN', description: 'Inicio semana de receso octubre SDI.' },
+  { id: 'sdi_oct_end', title: 'FINAL SDI (RECESO OCTUBRE)', start: new Date(2026, 9, 9), end: new Date(2026, 9, 9), type: 'institucional', location: 'IENSECAN', description: 'Fin semana de receso octubre SDI.' },
+  { id: 'sdi_fin_start', title: 'INICIO SDI (CIERRE ANUAL)', start: new Date(2026, 11, 7), end: new Date(2026, 11, 7), type: 'institucional', location: 'IENSECAN', description: 'Evaluación final de gestión.' },
+  { id: 'sdi_fin_end', title: 'FINAL SDI (CIERRE ANUAL)', start: new Date(2026, 11, 11), end: new Date(2026, 11, 11), type: 'institucional', location: 'IENSECAN', description: 'Clausura de actividades docentes 2026.' },
 
-  // --- PERIODOS LECTIVOS ---
-  { id: 'pl1', title: 'INICIO PRIMER PERIODO LECTIVO', start: new Date(2026, 0, 26), end: new Date(2026, 0, 26), type: 'academico', location: 'Todas las Sedes' },
-  { id: 'pl2', title: 'FINAL PRIMER PERIODO LECTIVO', start: new Date(2026, 5, 26), end: new Date(2026, 5, 26), type: 'academico', location: 'Todas las Sedes' },
-  { id: 'pl3', title: 'INICIO SEGUNDO PERIODO LECTIVO', start: new Date(2026, 6, 21), end: new Date(2026, 6, 21), type: 'academico', location: 'Todas las Sedes' },
-  { id: 'pl4', title: 'FINAL SEGUNDO PERIODO LECTIVO (FIN DE CLASES)', start: new Date(2026, 11, 4), end: new Date(2026, 11, 4), type: 'academico', location: 'Todas las Sedes' },
+  // --- PERIODOS LECTIVOS (TRIMESTRES) ---
+  { 
+    id: 'clases_start_h1', 
+    title: 'ACTO DE BIENVENIDA E IZADA DE BANDERA', 
+    start: new Date(2026, 0, 26), 
+    end: new Date(2026, 0, 26), 
+    type: 'academico', 
+    time: '06:45',
+    location: 'Patio Central Sede Nelson Muñoz y Sedes Rurales', 
+    participants: 'Estudiantes, Padres de Familia, Docentes y Directivos',
+    observations: 'Protocolo institucional de apertura del año lectivo 2026. Saludo oficial de Rectoría.',
+    description: 'Apertura oficial del año académico con protocolo de bandera.'
+  },
+  { 
+    id: 'clases_start_h2', 
+    title: 'INDUCCIÓN POR DIRECTORES DE GRUPO', 
+    start: new Date(2026, 0, 26), 
+    end: new Date(2026, 0, 26), 
+    type: 'academico', 
+    time: '08:30',
+    location: 'Aulas de Clase (Sedes IENSECAN)', 
+    participants: 'Directores de Grupo y Estudiantes',
+    observations: 'Entrega de horarios, asignación de pupitres y presentación de planes de área.',
+    description: 'Sesión de organización grupal inicial.'
+  },
+  { 
+    id: 'clases_start_h3', 
+    title: 'SOCIALIZACIÓN MANUAL DE CONVIVENCIA Y PACTOS DE AULA', 
+    start: new Date(2026, 0, 26), 
+    end: new Date(2026, 0, 26), 
+    type: 'academico', 
+    time: '10:30',
+    location: 'Aulas de Clase', 
+    participants: 'Docentes y Estudiantes',
+    observations: 'Firma de pactos de convivencia escolar y compromisos académicos 2026.',
+    description: 'Encuadre de convivencia para el nuevo año.'
+  },
 
-  // --- RECESOS ESTUDIANTILES ---
-  { id: 're1', title: 'Receso Estudiantil Semana Santa', start: new Date(2026, 2, 30), end: new Date(2026, 3, 3), type: 'vacaciones', location: 'Receso Estudiantil' },
-  { id: 're2', title: 'Receso Estudiantil Mitad de Año (Vacaciones)', start: new Date(2026, 5, 29), end: new Date(2026, 6, 17), type: 'vacaciones', location: 'Receso Estudiantil' },
-  { id: 're3', title: 'Receso Estudiantil Octubre', start: new Date(2026, 9, 5), end: new Date(2026, 9, 9), type: 'vacaciones', location: 'Receso Estudiantil' },
-  { id: 're4', title: 'Finalización Labores Académicas (Vacaciones Finales)', start: new Date(2026, 11, 7), end: new Date(2026, 11, 31), type: 'vacaciones', location: 'Receso Estudiantil' },
+  { id: 'p1_end', title: 'FINAL 1er PERIODO', start: new Date(2026, 3, 10), end: new Date(2026, 3, 10), type: 'academico', location: 'IENSECAN', description: 'Cierre del primer trimestre académico.' },
+  { id: 'p2_start', title: 'INICIO 2do PERIODO', start: new Date(2026, 3, 13), end: new Date(2026, 3, 13), type: 'academico', location: 'IENSECAN', description: 'Apertura del segundo trimestre académico.' },
+  { id: 'p2_end', title: 'FINAL 2do PERIODO', start: new Date(2026, 7, 21), end: new Date(2026, 7, 21), type: 'academico', location: 'IENSECAN', description: 'Cierre del segundo trimestre académico.' },
+  { id: 'p3_start', title: 'INICIO 3er PERIODO', start: new Date(2026, 7, 24), end: new Date(2026, 7, 24), type: 'academico', location: 'IENSECAN', description: 'Apertura del tercer y último trimestre.' },
+  { id: 'p3_end', title: 'FINAL DE CLASES (FIN 3er PERIODO)', start: new Date(2026, 11, 4), end: new Date(2026, 11, 4), type: 'academico', location: 'Todas las Sedes', description: 'Clausura de clases con estudiantes 2026.' },
+
+  // --- VACACIONES / RECESOS ---
+  { id: 'v1', title: 'Vacaciones Estudiantiles Junio', start: new Date(2026, 5, 29), end: new Date(2026, 6, 17), type: 'vacaciones', location: 'General' },
+  { id: 'v2', title: 'Receso Octubre', start: new Date(2026, 9, 5), end: new Date(2026, 9, 9), type: 'vacaciones', location: 'General' },
 ];
