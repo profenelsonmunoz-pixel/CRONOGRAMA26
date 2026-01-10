@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IENSECAN - Calendario Académico 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://iensecan.edu.co/wp-content/uploads/2024/08/ESCUDO-IENSECAN-2020-2.png" rel="stylesheet">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;900&display=swap');
         body {
             font-family: 'Montserrat', sans-serif;
             background-color: #f1f5f9;
@@ -25,35 +25,24 @@
             background: #cbd5e1;
             border-radius: 10px;
         }
-
-        /* Efecto Metálico Moderno 3D - Versión Refinada/Delgada */
         .metallic-3d-frame {
             border: 4px solid #1e3a8a;
             border-radius: 3.5rem;
             position: relative;
             box-shadow: 
-                0 0 0 1px #94a3b8, /* Borde exterior metálico muy fino */
-                0 0 0 3px #f8fafc, /* Separador de luz reducido */
-                0 0 0 5px #cbd5e1, /* Borde exterior de aluminio más fino */
-                inset 2px 2px 5px rgba(255,255,255,0.4), /* Brillo interno ajustado */
-                inset -2px -2px 5px rgba(0,0,0,0.2), /* Sombra interna ajustada */
-                0 20px 40px -10px rgba(30, 58, 138, 0.2); /* Sombra proyectada más suave */
+                0 0 0 1px #94a3b8,
+                0 0 0 3px #f8fafc,
+                0 0 0 5px #cbd5e1,
+                inset 2px 2px 5px rgba(255,255,255,0.4),
+                inset -2px -2px 5px rgba(0,0,0,0.2),
+                0 20px 40px -10px rgba(30, 58, 138, 0.2);
             background-clip: padding-box;
             background-color: white;
         }
-
         .metallic-header {
             background: linear-gradient(145deg, #f8fafc, #e2e8f0);
             border-bottom: 2px solid #cbd5e1;
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
-        }
-
-        .glass-highlight {
-            background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%);
-            pointer-events: none;
-            position: absolute;
-            inset: 0;
-            z-index: 5;
         }
     </style>
 <script type="importmap">
@@ -63,14 +52,12 @@
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
     "lucide-react": "https://esm.sh/lucide-react@0.463.0?external=react",
-    "jspdf": "https://esm.sh/jspdf@2.5.1",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2?external=jspdf",
     "date-fns": "https://esm.sh/date-fns@4.1.0",
     "date-fns/locale/es": "https://esm.sh/date-fns@4.1.0/locale/es",
     "framer-motion": "https://esm.sh/framer-motion@11.11.17?external=react,react-dom",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "date-fns/": "https://esm.sh/date-fns@^4.1.0/"
+    "date-fns/": "https://esm.sh/date-fns@^4.1.0/",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
