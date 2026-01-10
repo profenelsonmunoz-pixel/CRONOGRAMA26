@@ -117,12 +117,14 @@ export default function App() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [selectedDayEvents, setSelectedDayEvents] = useState<{ date: Date; events: CalendarEvent[] } | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
   const RESOLUTION_PDF_URL = "https://drive.google.com/file/d/1ITb8dynfmdWBttmjIyGLhQtz17URcLxG/view?usp=drive_link";
+  const ADMIN_PASSWORD = "iensecan2026*";
 
   const [formData, setFormData] = useState({
     title: '',
@@ -173,6 +175,16 @@ export default function App() {
       start: dateString,
       day: format(date, 'EEEE', { locale: es }).toUpperCase()
     }));
+  };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginPassword === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setLoginPassword('');
+    } else {
+      alert("Contraseña incorrecta. Intente de nuevo.");
+    }
   };
 
   const handleSaveEvent = (e: React.FormEvent) => {
@@ -589,11 +601,24 @@ export default function App() {
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[3rem] w-full max-w-md p-12 shadow-2xl border-4 border-blue-900 text-center">
                 <Lock size={64} className="text-blue-900 mb-8 mx-auto" />
                 <h3 className="text-3xl font-black text-blue-950 uppercase mb-8 tracking-tighter">Acceso Directivo</h3>
-                <form onSubmit={(e) => { e.preventDefault(); setIsAuthenticated(true); }} className="space-y-6">
-                  <input name="email" type="email" placeholder="usuario@iensecan.edu.co" required className="w-full px-8 py-5 bg-slate-100 rounded-2xl font-bold focus:ring-4 ring-blue-500/20 outline-none transition-all" />
-                  <input name="password" type="password" placeholder="••••••••" required className="w-full px-8 py-5 bg-slate-100 rounded-2xl font-bold focus:ring-4 ring-blue-500/20 outline-none transition-all" />
-                  <button type="submit" className="w-full bg-blue-900 text-white py-6 rounded-2xl font-black uppercase text-sm shadow-2xl hover:bg-blue-800 transition-all">Ingresar al Sistema</button>
-                  <button type="button" onClick={() => setIsAdminModalOpen(false)} className="w-full text-slate-400 font-black uppercase text-[10px] py-2 hover:text-red-500 transition-colors">Volver al Calendario</button>
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div className="text-left space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Usuario Institucional</label>
+                    <input type="email" defaultValue="administrador@iensecan.edu.co" disabled className="w-full px-8 py-5 bg-slate-50 rounded-2xl font-bold text-slate-400 border border-slate-100 cursor-not-allowed" />
+                  </div>
+                  <div className="text-left space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Contraseña de Acceso</label>
+                    <input 
+                      type="password" 
+                      placeholder="••••••••" 
+                      value={loginPassword} 
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required 
+                      className="w-full px-8 py-5 bg-slate-100 rounded-2xl font-bold focus:ring-4 ring-blue-500/20 outline-none transition-all border border-slate-200" 
+                    />
+                  </div>
+                  <button type="submit" className="w-full bg-blue-900 text-white py-6 rounded-2xl font-black uppercase text-sm shadow-2xl hover:bg-blue-800 transition-all">Desbloquear Gestión</button>
+                  <button type="button" onClick={() => { setIsAdminModalOpen(false); setLoginPassword(''); }} className="w-full text-slate-400 font-black uppercase text-[10px] py-2 hover:text-red-500 transition-colors">Volver al Calendario</button>
                 </form>
               </motion.div>
             ) : (
@@ -605,7 +630,7 @@ export default function App() {
                   </div>
                   <div className="flex gap-4">
                     {!isAddingNew && <button onClick={() => setIsAddingNew(true)} className="bg-[#facc15] text-blue-900 px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-3 shadow-xl hover:scale-105 transition-all"><PlusCircle size={20}/> NUEVA ACTIVIDAD</button>}
-                    <button onClick={() => setIsAdminModalOpen(false)} className="bg-white/10 hover:bg-white/20 p-4 rounded-full transition-all"><X size={32}/></button>
+                    <button onClick={() => { setIsAdminModalOpen(false); setIsAuthenticated(false); }} className="bg-white/10 hover:bg-white/20 p-4 rounded-full transition-all"><X size={32}/></button>
                   </div>
                 </div>
 
