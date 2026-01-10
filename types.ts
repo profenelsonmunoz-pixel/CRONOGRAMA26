@@ -17,8 +17,8 @@ export interface CalendarEvent {
 
 export type ViewType = 'day' | 'week' | 'month' | 'year';
 
-// Add DisplayMode type to define grid or list visualization options
-export type DisplayMode = 'grid' | 'list';
+// Se añaden 'week' y 'year' al modo de visualización para el control de la interfaz
+export type DisplayMode = 'grid' | 'list' | 'week' | 'year';
 
 export interface CalendarState {
   currentDate: Date;

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Printer, 
   Settings, 
@@ -35,22 +35,28 @@ import {
   BellRing,
   Award,
   Globe,
-  Sparkles
+  Sparkles,
+  CalendarRange,
+  CalendarClock,
+  ExternalLink,
+  Info as InfoIcon
 } from 'lucide-react';
 import { 
   format, 
-  addMonths, 
   eachDayOfInterval, 
   isWithinInterval, 
   isToday,
   endOfISOWeek,
   addDays,
+  addMonths,
   isSameMonth,
   endOfMonth,
   getDay,
   isSameDay,
   isAfter,
-  isBefore
+  isBefore,
+  endOfYear,
+  eachMonthOfInterval
 } from 'date-fns';
 import { es } from 'date-fns/locale/es';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -65,6 +71,8 @@ import {
   MONTH_NAMES 
 } from './constants';
 
+const LOCAL_STORAGE_KEY = 'iensecan_calendar_events_2026';
+
 const startOfISOWeek = (date: Date): Date => {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const day = d.getDay();
@@ -72,6 +80,10 @@ const startOfISOWeek = (date: Date): Date => {
   return new Date(d.setDate(diff));
 };
 const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const subDays = (date: Date, amount: number): Date => addDays(date, -amount);
+const startOfYear = (date: Date): Date => new Date(date.getFullYear(), 0, 1);
+
 const parseISO = (dateString: string): Date => {
   if (!dateString) return new Date();
   const parts = dateString.split('-');
@@ -94,7 +106,24 @@ const getEventFullDate = (event: CalendarEvent): Date => {
 };
 
 export default function App() {
+  // Inicialización con persistencia de datos
   const [events, setEvents] = useState<CalendarEvent[]>(() => {
+    const savedEvents = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (savedEvents) {
+      try {
+        const parsed = JSON.parse(savedEvents);
+        // Re-convertir las fechas de string a objeto Date
+        return parsed.map((e: any) => ({
+          ...e,
+          start: new Date(e.start),
+          end: new Date(e.end)
+        }));
+      } catch (error) {
+        console.error("Error cargando eventos guardados:", error);
+      }
+    }
+    
+    // Si no hay datos guardados, cargar los iniciales por defecto
     return INITIAL_EVENTS.map(e => ({
       ...e,
       day: e.day || format(e.start, 'EEEE', { locale: es }).toUpperCase(),
@@ -108,12 +137,17 @@ export default function App() {
 
   const [now, setNow] = useState(new Date());
 
+  // Efecto para guardar cambios automáticamente cada vez que la lista de eventos cambie
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(events));
+  }, [events]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1));
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -121,7 +155,9 @@ export default function App() {
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [selectedDayEvents, setSelectedDayEvents] = useState<{ date: Date; events: CalendarEvent[] } | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+  
+  const [hoveredDayData, setHoveredDayData] = useState<{ date: Date; events: CalendarEvent[]; x: number; y: number; align: 'left' | 'right' } | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const RESOLUTION_PDF_URL = "https://drive.google.com/file/d/1ITb8dynfmdWBttmjIyGLhQtz17URcLxG/view?usp=drive_link";
   const ADMIN_PASSWORD = "iensecan2026*";
@@ -208,13 +244,23 @@ export default function App() {
     
     setIsAddingNew(false);
     setEditingEvent(null);
+    setFormData({
+      title: '',
+      start: format(new Date(), 'yyyy-MM-dd'),
+      type: 'academico' as EventType,
+      day: format(new Date(), 'EEEE', { locale: es }).toUpperCase(),
+      time: '06:30',
+      location: 'Todas las Sedes',
+      participants: 'Comunidad Educativa',
+      observations: ''
+    });
   };
 
   const renderMonthView = () => {
     const start = startOfMonth(currentDate);
     const days = eachDayOfInterval({ start: startOfISOWeek(start), end: endOfISOWeek(endOfMonth(start)) });
     return (
-      <div className="flex flex-col bg-[#1e3a8a]">
+      <div className="flex flex-col bg-[#1e3a8a] relative">
         <div className="grid grid-cols-7 metallic-header text-[#1e3a8a] font-black text-[11px] uppercase py-3 text-center relative z-20">
           {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map(d => <div key={d}>{d}</div>)}
         </div>
@@ -232,12 +278,40 @@ export default function App() {
             const efemerideEvent = dayEvents.find(e => e.type === 'efemeride');
             const isSunday = getDay(day) === 0;
 
+            const handleMouseEnter = (e: React.MouseEvent) => {
+              if (dayEvents.length > 0) {
+                if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                const screenWidth = window.innerWidth;
+                
+                const align = (rect.left + 350 > screenWidth) ? 'left' : 'right';
+                const xPos = align === 'right' ? rect.left + window.scrollX + 20 : rect.right + window.scrollX - 340;
+
+                setHoveredDayData({ 
+                  date: day, 
+                  events: dayEvents, 
+                  x: xPos, 
+                  y: rect.top + window.scrollY - 10,
+                  align: align
+                });
+              }
+            };
+
+            const handleMouseLeave = () => {
+              hoverTimeoutRef.current = setTimeout(() => {
+                setHoveredDayData(null);
+              }, 300);
+            };
+
             return (
               <div 
                 key={idx} 
-                onClick={() => setSelectedDayEvents({ date: day, events: dayEvents })}
-                onMouseEnter={() => dayEvents.length > 0 && setHoveredDate(dateKey)}
-                onMouseLeave={() => setHoveredDate(null)}
+                onClick={() => {
+                  setHoveredDayData(null);
+                  setSelectedDayEvents({ date: day, events: dayEvents });
+                }}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
                 className={`group aspect-square p-2 flex flex-col cursor-pointer transition-all hover:brightness-95 relative
                   ${!isCurrMonth ? 'bg-slate-100 opacity-40' : 
                     isRefToday ? 'bg-yellow-50 ring-inset ring-4 ring-[#facc15] z-10 shadow-xl' :
@@ -265,39 +339,12 @@ export default function App() {
                    <div className="flex gap-1">
                       {isPatron && <Sparkles size={16} className="text-yellow-500 animate-pulse" />}
                       {isRefToday && <div className="bg-[#facc15] text-[#1e3a8a] text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-sm animate-pulse">HOY</div>}
-                      {efemerideEvent && <Globe size={12} className="text-violet-500" />}
-                      {isAcademic && <Award size={14} className="text-emerald-600" />}
-                      {holidayEvent && <Star size={12} className="text-red-500 fill-red-500" />}
+                      {dayEvents.length > 1 && <div className="bg-blue-600 text-white text-[7px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white shadow-sm">{dayEvents.length}</div>}
                    </div>
                 </div>
 
                 <div className="mt-1 space-y-0.5 overflow-hidden">
-                   {isPatron && isCurrMonth && (
-                     <div className="bg-yellow-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-md w-fit border border-yellow-200 animate-bounce">
-                       DÍA PATRONAL
-                     </div>
-                   )}
-                   {isAcademic && isCurrMonth && !isPatron && (
-                     <div className="bg-emerald-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-sm w-fit border border-emerald-400 animate-pulse">
-                       {boundaryLabel}
-                     </div>
-                   )}
-                   {efemerideEvent && isCurrMonth && !isAcademic && !isPatron && (
-                     <div className="bg-violet-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-sm w-fit border border-violet-400">
-                       EFEMÉRIDE
-                     </div>
-                   )}
-                   {isSDI && isCurrMonth && !isAcademic && !isPatron && !efemerideEvent && (
-                     <div className="bg-blue-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-sm w-fit border border-blue-400">
-                       HITO SDI
-                     </div>
-                   )}
-                   {holidayEvent && isCurrMonth && !isAcademic && !isPatron && !efemerideEvent && (
-                     <div className="bg-red-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-sm uppercase mb-1 shadow-sm w-fit animate-pulse border border-red-400">
-                       FESTIVO
-                     </div>
-                   )}
-                   {dayEvents.slice(0, 1).map(e => (
+                   {dayEvents.slice(0, 2).map(e => (
                      <div key={e.id} className={`text-[6px] font-black uppercase truncate px-1 rounded-sm
                        ${isPatronDay(e.start) ? 'bg-yellow-700 text-white' :
                          isAcademicBoundary(e.start) ? 'bg-emerald-700 text-white' :
@@ -309,44 +356,278 @@ export default function App() {
                      </div>
                    ))}
                 </div>
-
-                <AnimatePresence>
-                  {hoveredDate === dateKey && dayEvents.length > 0 && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className={`absolute left-0 top-full mt-2 min-w-[280px] z-[100] rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.4)] border-2 p-5 backdrop-blur-3xl
-                        ${isPatron ? 'bg-yellow-950/95 border-yellow-400' : isAcademic ? 'bg-emerald-950/95 border-emerald-400' : efemerideEvent ? 'bg-violet-950/95 border-violet-400' : 'bg-slate-900/95 border-blue-400'}
-                      `}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[#facc15] flex items-center gap-2">
-                          {isPatron ? <Sparkles size={14}/> : isAcademic ? <Award size={14}/> : efemerideEvent ? <Globe size={14}/> : <CalendarIcon size={14} />} Detalle de Agenda
-                        </span>
-                        <MoreHorizontal size={14} className="text-white/40" />
-                      </div>
-                      <div className="space-y-3">
-                        {dayEvents.map(e => (
-                          <div 
-                            key={e.id}
-                            onClick={() => setSelectedDayEvents({ date: day, events: [e] })}
-                            className="group/item flex items-center gap-3 p-3 rounded-xl hover:bg-white/10 transition-all border border-transparent hover:border-white/10"
-                          >
-                            <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isPatronDay(e.start) ? 'bg-yellow-400 animate-pulse' : isAcademicBoundary(e.start) ? 'bg-emerald-400 animate-pulse' : e.type === 'efemeride' ? 'bg-violet-400' : 'bg-blue-400'}`}></div>
-                            <div className="flex-grow">
-                              <p className="text-[11px] font-black text-white uppercase leading-tight group-hover/item:text-[#facc15]">{e.title}</p>
-                              <p className="text-[8px] text-white/50 font-bold uppercase tracking-tighter">{e.type} | {e.time}</p>
-                            </div>
-                            <ChevronRight size={14} className="text-white/20 group-hover/item:text-white transition-all group-hover/item:translate-x-1" />
-                          </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
+            );
+          })}
+        </div>
+
+        <AnimatePresence>
+          {hoveredDayData && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 10, x: hoveredDayData.align === 'right' ? -10 : 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              onMouseEnter={() => { if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current); }}
+              onMouseLeave={() => setHoveredDayData(null)}
+              style={{ 
+                position: 'fixed',
+                left: `${hoveredDayData.x}px`,
+                top: `${hoveredDayData.y}px`,
+                zIndex: 100
+              }}
+              className="bg-white rounded-[2.5rem] shadow-[0_25px_60px_-15px_rgba(30,58,138,0.5)] border-4 border-blue-900 w-[320px] overflow-hidden metallic-3d-frame no-print"
+            >
+              <div className="bg-blue-900 p-5 text-white flex justify-between items-center relative">
+                <div className="absolute top-0 right-0 p-4 opacity-10"><CalendarSearch size={60}/></div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-400 leading-none mb-1">{format(hoveredDayData.date, 'EEEE', { locale: es })}</p>
+                  <p className="text-xl font-black uppercase leading-none tracking-tighter">{format(hoveredDayData.date, 'dd MMMM, yyyy', { locale: es })}</p>
+                </div>
+                <div className="bg-white/10 p-2 rounded-xl">
+                  <CalendarDays size={24} className="text-yellow-400"/>
+                </div>
+              </div>
+              
+              <div className="p-5 space-y-3 max-h-[350px] overflow-y-auto custom-scroll bg-slate-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="h-0.5 flex-grow bg-slate-200"></span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2">Seleccione una Actividad</span>
+                  <span className="h-0.5 flex-grow bg-slate-200"></span>
+                </div>
+                
+                {hoveredDayData.events.map(ev => (
+                  <button 
+                    key={ev.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setHoveredDayData(null);
+                      setSelectedDayEvents({ date: hoveredDayData.date, events: [ev] });
+                    }}
+                    className={`w-full text-left p-4 rounded-2xl border-2 transition-all flex items-start gap-4 group relative overflow-hidden
+                      ${isPatronDay(ev.start) ? 'bg-yellow-50 border-yellow-200 hover:border-yellow-500' : 'bg-white border-slate-100 hover:border-blue-400 hover:shadow-md'}
+                    `}
+                  >
+                    {isPatronDay(ev.start) && <div className="absolute top-0 right-0 p-2 text-yellow-200/50"><Sparkles size={16}/></div>}
+                    <div className={`mt-1 w-3 h-3 rounded-full flex-shrink-0 shadow-sm transition-transform group-hover:scale-125
+                      ${isPatronDay(ev.start) ? 'bg-yellow-500 animate-pulse' : 
+                        ev.type === 'efemeride' ? 'bg-violet-500' : 
+                        ev.type === 'festivo' ? 'bg-red-500' : 'bg-blue-500'}
+                    `}></div>
+                    <div className="flex-grow">
+                      <p className={`text-[11px] font-black uppercase line-clamp-2 leading-tight transition-colors
+                        ${isPatronDay(ev.start) ? 'text-yellow-800' : 'text-blue-950 group-hover:text-blue-600'}
+                      `}>
+                        {ev.title}
+                      </p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <Clock size={10} className="text-slate-400" />
+                          <span className="text-[9px] font-black text-slate-400 uppercase">{ev.time}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <MapPin size={10} className="text-slate-400" />
+                          <span className="text-[9px] font-black text-slate-400 uppercase truncate max-w-[120px]">{ev.location}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity self-center">
+                      <InfoIcon size={14} className="text-blue-600" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+              
+              <div className="bg-blue-50 p-3 text-center border-t border-slate-100">
+                 <p className="text-[8px] font-black text-blue-900/40 uppercase flex items-center justify-center gap-2">
+                   <Eye size={10}/> Haga clic para ver detalles y observaciones
+                 </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  };
+
+  const renderWeekView = () => {
+    const startWeek = startOfISOWeek(currentDate);
+    const endWeek = endOfISOWeek(currentDate);
+    const days = eachDayOfInterval({ start: startWeek, end: endWeek });
+
+    return (
+      <div className="bg-white p-6 md:p-10 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 border-b border-blue-50 pb-6">
+          <div className="flex items-center gap-4 text-blue-900">
+            <CalendarRange size={40} className="text-[#1e3a8a]" />
+            <div>
+              <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">Agenda Semanal</h4>
+              <p className="text-blue-500 font-bold uppercase text-[10px] tracking-widest mt-2 flex items-center gap-2">
+                <Clock size={12} className="animate-spin-slow" /> Semana del {format(startWeek, "d 'de' MMM", {locale: es})} al {format(endWeek, "d 'de' MMM", {locale: es})}
+              </p>
+            </div>
+          </div>
+          <div className="bg-blue-50 px-6 py-3 rounded-2xl border border-blue-100 text-right">
+             <p className="text-slate-400 font-black uppercase text-[9px] tracking-widest leading-none mb-1">Rango Semanal</p>
+             <p className="text-blue-900 font-black uppercase text-xs">Visión 7 Días</p>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+          {days.map((day, idx) => {
+            const dayEvents = events.filter(e => isWithinInterval(startOfDay(day), { start: startOfDay(e.start), end: startOfDay(e.end) }));
+            const isPatron = isPatronDay(day);
+            const isRefToday = isToday(day);
+            
+            return (
+              <motion.div 
+                key={idx}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                className={`relative rounded-[2.5rem] border-2 p-6 flex flex-col gap-4 min-h-[380px] transition-all cursor-pointer group hover:shadow-2xl hover:scale-[1.02]
+                  ${isPatron ? 'bg-yellow-50 border-yellow-400 ring-4 ring-yellow-400/10' : isRefToday ? 'bg-blue-50 border-blue-400 ring-4 ring-blue-400/20' : 'bg-slate-50 border-white shadow-sm'}
+                `}
+                onClick={() => setSelectedDayEvents({ date: day, events: dayEvents })}
+              >
+                {isRefToday && (
+                  <div className="absolute top-4 right-4 bg-blue-600 text-white text-[7px] font-black px-2 py-1 rounded-full shadow-lg border border-blue-400 animate-pulse z-20">
+                    DÍA ACTUAL
+                  </div>
+                )}
+                
+                <div className="text-center border-b pb-4 border-slate-200 group-hover:border-blue-200">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{format(day, 'EEEE', { locale: es })}</p>
+                  <p className={`text-4xl font-black leading-none ${isPatron ? 'text-yellow-700' : isRefToday ? 'text-blue-900' : 'text-slate-800'}`}>{format(day, 'd')}</p>
+                </div>
+                
+                <div className="flex-grow space-y-3">
+                  {dayEvents.length > 0 ? dayEvents.map(e => (
+                    <div key={e.id} className={`p-4 rounded-2xl border text-left space-y-1 transition-all group-hover:bg-white group-hover:shadow-md
+                      ${isPatronDay(e.start) ? 'bg-yellow-200 border-yellow-400 shadow-sm' : 'bg-white border-slate-100 shadow-sm'}
+                    `}>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <p className="text-[8px] font-black text-blue-900 uppercase leading-none flex items-center gap-1"><Clock size={8}/> {e.time}</p>
+                        {isPatronDay(e.start) && <Sparkles size={8} className="text-yellow-700" />}
+                      </div>
+                      <p className="text-[10px] font-black text-blue-950 uppercase line-clamp-2 leading-tight">{e.title}</p>
+                    </div>
+                  )) : (
+                    <div className="h-full flex flex-col items-center justify-center opacity-10 grayscale">
+                      <CalendarSearch size={32} />
+                      <p className="text-[8px] font-black uppercase mt-2">Sin actividad</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderYearView = () => {
+    const months = eachMonthOfInterval({
+      start: startOfYear(new Date(2026, 0, 1)),
+      end: endOfYear(new Date(2026, 0, 1))
+    });
+
+    return (
+      <div className="bg-slate-100 p-8 md:p-12">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 pb-6 border-b border-blue-200">
+          <div className="flex items-center gap-4 text-blue-900">
+            <CalendarDays size={32} />
+            <h4 className="text-2xl font-black uppercase tracking-tighter">Panorama Académico 2026</h4>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div><span className="text-[8px] font-black uppercase text-slate-500">Lectivo</span></div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-[8px] font-black uppercase text-slate-500">SDI</span></div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500"></div><span className="text-[8px] font-black uppercase text-slate-500">Vacaciones</span></div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div><span className="text-[8px] font-black uppercase text-slate-500">Festivo</span></div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+          {months.map((month, idx) => {
+            const startM = startOfMonth(month);
+            const endM = endOfMonth(month);
+            const days = eachDayOfInterval({ start: startOfISOWeek(startM), end: endOfISOWeek(endM) });
+
+            return (
+              <motion.div 
+                key={idx}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.03 }}
+                onClick={() => { setCurrentDate(month); setDisplayMode('grid'); }}
+                className="bg-white rounded-[2.5rem] p-6 shadow-lg border-2 border-transparent hover:border-blue-400 transition-all cursor-pointer group overflow-hidden relative"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-all"><CalendarIcon size={100}/></div>
+                <h5 className="text-xl font-black text-blue-900 uppercase tracking-tighter mb-4 text-center border-b pb-2 border-slate-50 group-hover:text-blue-600 transition-colors">
+                  {MONTH_NAMES[idx]}
+                </h5>
+                <div className="grid grid-cols-7 gap-1 text-center">
+                  {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => (
+                    <div key={d} className="text-[8px] font-black text-slate-300 uppercase mb-2">{d}</div>
+                  ))}
+                  {days.map((day, dIdx) => {
+                    const isCurrMonth = isSameMonth(day, month);
+                    if (!isCurrMonth) return <div key={dIdx} className="aspect-square"></div>;
+
+                    const dayEvents = events.filter(e => isWithinInterval(startOfDay(day), { start: startOfDay(e.start), end: startOfDay(e.end) }));
+                    const isAcademicBoundaryDay = isAcademicBoundary(day);
+                    const isSDIBoundaryDay = isSDIBoundary(day);
+                    const isPatron = isPatronDay(day);
+                    const isRefToday = isToday(day);
+                    const holiday = dayEvents.find(e => e.type === 'festivo');
+                    const vacation = dayEvents.find(e => e.type === 'vacaciones');
+                    const sdi = dayEvents.find(e => e.type === 'institucional');
+                    const isSun = getDay(day) === 0;
+
+                    let bgClass = "transparent";
+                    let textClass = "text-slate-600";
+                    let ringClass = "";
+
+                    if (isPatron) {
+                      bgClass = "bg-yellow-400 shadow-md scale-110 z-10";
+                      textClass = "text-white";
+                    } else if (isRefToday) {
+                      bgClass = "bg-blue-900 animate-pulse shadow-lg scale-110 z-10";
+                      textClass = "text-white";
+                      ringClass = "ring-2 ring-yellow-400";
+                    } else if (holiday) {
+                      bgClass = "bg-red-500";
+                      textClass = "text-white";
+                    } else if (isAcademicBoundaryDay) {
+                      bgClass = "bg-emerald-600 ring-2 ring-emerald-200 shadow-sm";
+                      textClass = "text-white";
+                    } else if (isSDIBoundaryDay) {
+                      bgClass = "bg-blue-600 ring-2 ring-blue-200 shadow-sm";
+                      textClass = "text-white";
+                    } else if (vacation) {
+                      const isVacStartEnd = isSameDay(day, vacation.start) || isSameDay(day, vacation.end);
+                      bgClass = isVacStartEnd ? "bg-orange-600 ring-2 ring-orange-200" : "bg-orange-100";
+                      textClass = isVacStartEnd ? "text-white" : "text-orange-700";
+                    } else if (sdi) {
+                      bgClass = "bg-blue-50";
+                      textClass = "text-blue-700";
+                    } else if (isSun) {
+                      textClass = "text-red-400";
+                    }
+
+                    return (
+                      <div 
+                        key={dIdx} 
+                        className={`aspect-square text-[9px] font-black flex items-center justify-center rounded-full transition-all
+                          ${bgClass} ${textClass} ${ringClass}
+                        `}
+                      >
+                        {format(day, 'd')}
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
             );
           })}
         </div>
@@ -383,6 +664,36 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-12 flex-grow w-full">
+        {/* Barra de Estado de Hoy - PERSISTENTE */}
+        <section className="bg-gradient-to-r from-blue-900 via-blue-800 to-blue-900 text-white rounded-[2.5rem] p-6 shadow-xl border-t-4 border-yellow-400 no-print flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden relative">
+          <div className="absolute top-0 right-0 p-8 opacity-5"><CalendarClock size={120}/></div>
+          <div className="flex items-center gap-6 relative z-10">
+            <div className="bg-yellow-400 text-blue-900 p-4 rounded-3xl shadow-lg border-2 border-white/20">
+              <CalendarDays size={32}/>
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-400 leading-none mb-1">Hoy es</p>
+              <h3 className="text-xl md:text-3xl font-black uppercase tracking-tighter leading-tight">
+                {format(now, "EEEE d 'de' MMMM", { locale: es })}
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center gap-8 relative z-10 bg-white/5 px-8 py-3 rounded-3xl border border-white/10 backdrop-blur-md">
+            <div className="text-center">
+              <p className="text-[8px] font-black uppercase text-slate-400 mb-1">Año</p>
+              <p className="text-xl font-black text-yellow-400 leading-none">{format(now, "yyyy")}</p>
+            </div>
+            <div className="w-[1px] h-10 bg-white/20"></div>
+            <div className="text-center">
+              <p className="text-[8px] font-black uppercase text-slate-400 mb-1">Hora Actual</p>
+              <p className="text-xl font-black leading-none tabular-nums flex items-center gap-2">
+                <Clock size={16} className="text-yellow-400 animate-pulse" /> {format(now, "HH:mm:ss")}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Próxima Actividad */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 no-print">
           <div className="lg:col-span-7">
             <div className="flex items-center gap-3 mb-6">
@@ -427,19 +738,9 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                    
-                    <button onClick={() => setSelectedDayEvents({ date: featuredEvent.start, events: [featuredEvent] })} 
-                            className={`${isPatronDay(featuredEvent.start) ? 'bg-yellow-600' : 'bg-blue-900'} text-white px-10 py-5 rounded-2xl font-black uppercase text-xs flex items-center gap-3 shadow-xl hover:scale-105 transition-all`}>
-                      Ver Ficha Completa <ArrowUpRight size={20}/>
-                    </button>
                   </div>
                 </motion.div>
-              ) : (
-                <div className="bg-white rounded-[3.5rem] p-20 shadow-xl border-2 border-slate-100 text-center">
-                  <CalendarSearch size={64} className="mx-auto text-slate-200 mb-6" />
-                  <p className="text-slate-400 font-black uppercase tracking-widest">Agenda despejada para este periodo</p>
-                </div>
-              )}
+              ) : null}
             </AnimatePresence>
           </div>
 
@@ -449,72 +750,137 @@ export default function App() {
               <div className="h-0.5 flex-grow mx-4 bg-slate-200"></div>
             </div>
             <div className="space-y-3 overflow-y-auto max-h-[500px] pr-2 custom-scroll">
-               {nextSevenEvents.map((e, idx) => {
-                 const isAcademic = isAcademicBoundary(e.start);
-                 const isSDI = isSDIBoundary(e.start);
-                 const isPatron = isPatronDay(e.start);
-                 const isEfemeride = e.type === 'efemeride';
-                 return (
-                   <motion.div 
-                     key={e.id} 
-                     initial={{ opacity: 0, y: 10 }} 
-                     animate={{ opacity: 1, y: 0 }} 
-                     transition={{ delay: idx * 0.05 }}
-                     onClick={() => setSelectedDayEvents({ date: e.start, events: [e] })}
-                     className={`p-5 rounded-3xl border-2 transition-all cursor-pointer group flex items-center gap-5 shadow-sm
-                       ${isPatron ? 'bg-yellow-100 border-yellow-500' : isAcademic ? 'bg-emerald-100 border-emerald-500' : isEfemeride ? 'bg-violet-50 border-violet-500' : isSDI ? 'bg-blue-50 border-blue-500' : 'bg-white border-blue-50 hover:border-[#facc15]'}
-                     `}
-                   >
-                      <div className={`min-w-[65px] h-16 rounded-2xl flex flex-col items-center justify-center border 
-                        ${isPatron ? 'bg-yellow-200 border-yellow-400 text-yellow-900' : isAcademic ? 'bg-emerald-200 border-emerald-400 text-emerald-900' : isEfemeride ? 'bg-violet-200 border-violet-400 text-violet-900' : 'bg-blue-50 border-blue-100 text-[#1e3a8a]'}
-                      `}>
-                          <span className="text-[9px] font-black uppercase leading-none">{format(e.start, 'MMM', { locale: es })}</span>
-                          <span className="text-2xl font-black leading-none">{format(e.start, 'dd')}</span>
-                      </div>
-                      <div className="flex-grow">
-                          <h5 className={`text-[11px] font-black uppercase line-clamp-1 transition-colors ${isPatron ? 'text-yellow-900' : isAcademic ? 'text-emerald-900' : isEfemeride ? 'text-violet-900' : 'text-blue-950 group-hover:text-blue-600'}`}>{e.title}</h5>
-                          <p className="text-[9px] text-slate-400 font-medium italic line-clamp-1 mt-1">"{e.observations || e.description}"</p>
-                      </div>
-                      <ChevronRight size={18} className="text-slate-200 group-hover:text-[#facc15] transition-all" />
-                   </motion.div>
-                 );
-               })}
+               {nextSevenEvents.map((e, idx) => (
+                 <motion.div 
+                   key={e.id} 
+                   initial={{ opacity: 0, y: 10 }} 
+                   animate={{ opacity: 1, y: 0 }} 
+                   transition={{ delay: idx * 0.05 }}
+                   onClick={() => setSelectedDayEvents({ date: e.start, events: [e] })}
+                   className={`p-5 rounded-3xl border-2 transition-all cursor-pointer group flex items-center gap-5 shadow-sm bg-white border-blue-50 hover:border-[#facc15]`}
+                 >
+                    <div className={`min-w-[65px] h-16 rounded-2xl flex flex-col items-center justify-center border bg-blue-50 border-blue-100 text-[#1e3a8a]`}>
+                        <span className="text-[9px] font-black uppercase leading-none">{format(e.start, 'MMM', { locale: es })}</span>
+                        <span className="text-2xl font-black leading-none">{format(e.start, 'dd')}</span>
+                    </div>
+                    <div className="flex-grow">
+                        <h5 className="text-[11px] font-black uppercase line-clamp-1 transition-colors text-blue-950 group-hover:text-blue-600">{e.title}</h5>
+                        <p className="text-[9px] text-slate-400 font-medium italic line-clamp-1 mt-1">"{e.observations || e.description}"</p>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-200 group-hover:text-[#facc15] transition-all" />
+                 </motion.div>
+               ))}
             </div>
           </div>
         </section>
 
+        {/* Componente de Calendario Principal */}
         <section className="bg-white rounded-[3.5rem] shadow-2xl border-4 border-blue-900 overflow-hidden metallic-3d-frame no-print">
           <div className="bg-blue-900 p-8 flex flex-wrap justify-between items-center gap-6">
-            <div className="flex items-center gap-6 text-white">
-              <button onClick={() => setCurrentDate(addMonths(currentDate, -1))} className="p-2 hover:bg-white/20 rounded-full transition-all active:scale-90"><ArrowLeftCircle size={36} /></button>
-              <h3 className="text-2xl font-black uppercase tracking-tighter min-w-[200px] text-center">{MONTH_NAMES[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
-              <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 hover:bg-white/20 rounded-full transition-all active:scale-90"><ArrowRightCircle size={36} /></button>
+            <div className="flex items-center gap-4 text-white">
+              <div className="flex items-center gap-2">
+                <button onClick={() => {
+                  if(displayMode === 'year') setCurrentDate(subDays(currentDate, 365));
+                  else if(displayMode === 'week') setCurrentDate(subDays(currentDate, 7));
+                  else setCurrentDate(addMonths(currentDate, -1));
+                }} className="p-2 hover:bg-white/20 rounded-full transition-all active:scale-90"><ArrowLeftCircle size={36} /></button>
+                
+                <h3 className="text-2xl font-black uppercase tracking-tighter min-w-[200px] text-center">
+                  {displayMode === 'year' ? currentDate.getFullYear() : 
+                   displayMode === 'week' ? `Semana ${format(currentDate, 'w')}` : 
+                   `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`}
+                </h3>
+
+                <button onClick={() => {
+                  if(displayMode === 'year') setCurrentDate(addDays(currentDate, 365));
+                  else if(displayMode === 'week') setCurrentDate(addDays(currentDate, 7));
+                  else setCurrentDate(addMonths(currentDate, 1));
+                }} className="p-2 hover:bg-white/20 rounded-full transition-all active:scale-90"><ArrowRightCircle size={36} /></button>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  const today = new Date();
+                  setCurrentDate(today);
+                  if (displayMode === 'grid') setDisplayMode('grid');
+                }}
+                className="bg-[#facc15] text-blue-900 px-6 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 border-white/50 transition-all flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95"
+              >
+                <CalendarClock size={16}/> Ir a Hoy
+              </button>
             </div>
-            <div className="flex bg-white/10 p-1.5 rounded-2xl border border-white/10">
-              <button onClick={() => setDisplayMode('grid')} className={`p-3 rounded-xl transition-all ${displayMode === 'grid' ? 'bg-white text-blue-900' : 'text-white/50'}`}><LayoutGrid size={24}/></button>
-              <button onClick={() => setDisplayMode('list')} className={`p-3 rounded-xl transition-all ${displayMode === 'list' ? 'bg-white text-blue-900' : 'text-white/50'}`}><ListIcon size={24}/></button>
+
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex bg-white/10 p-1.5 rounded-2xl border border-white/10">
+                <button 
+                  onClick={() => setDisplayMode('grid')} 
+                  title="Mes"
+                  className={`p-3 rounded-xl transition-all flex items-center gap-2 font-black text-[10px] uppercase ${displayMode === 'grid' ? 'bg-white text-blue-900 shadow-xl' : 'text-white/50 hover:text-white'}`}>
+                  <LayoutGrid size={20}/> <span className="hidden md:inline">Mes</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setDisplayMode('week');
+                    setCurrentDate(new Date());
+                  }} 
+                  title="Semana"
+                  className={`p-3 rounded-xl transition-all flex items-center gap-2 font-black text-[10px] uppercase ${displayMode === 'week' ? 'bg-white text-blue-900 shadow-xl' : 'text-white/50 hover:text-white'}`}>
+                  <CalendarRange size={20}/> <span className="hidden md:inline">Semana</span>
+                </button>
+                <button 
+                  onClick={() => setDisplayMode('year')} 
+                  title="Año"
+                  className={`p-3 rounded-xl transition-all flex items-center gap-2 font-black text-[10px] uppercase ${displayMode === 'year' ? 'bg-white text-blue-900 shadow-xl' : 'text-white/50 hover:text-white'}`}>
+                  <CalendarIcon size={20}/> <span className="hidden md:inline">Año</span>
+                </button>
+                <div className="w-[1px] bg-white/10 mx-2"></div>
+                <button 
+                  onClick={() => setDisplayMode('list')} 
+                  title="Lista"
+                  className={`p-3 rounded-xl transition-all flex items-center gap-2 font-black text-[10px] uppercase ${displayMode === 'list' ? 'bg-white text-blue-900 shadow-xl' : 'text-white/50 hover:text-white'}`}>
+                  <ListIcon size={20}/> <span className="hidden md:inline">Lista</span>
+                </button>
+              </div>
             </div>
           </div>
-          <div className="min-h-[600px] bg-slate-100">
-            {displayMode === 'grid' ? renderMonthView() : (
-              <div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {events.filter(e => isSameMonth(e.start, currentDate)).map(e => (
-                   <div key={e.id} className="p-8 bg-white rounded-[2.5rem] border-2 border-blue-50 hover:border-[#facc15] transition-all cursor-pointer shadow-sm group" onClick={() => setSelectedDayEvents({ date: e.start, events: [e] })}>
-                      <div className="flex justify-between items-start mb-4">
-                        <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${isPatronDay(e.start) ? 'bg-yellow-600 text-white' : e.type === 'efemeride' ? 'bg-violet-900 text-white' : 'bg-blue-900 text-[#facc15]'}`}>
-                          {format(e.start, 'dd MMMM', { locale: es })}
-                        </span>
-                        <ArrowUpRight size={20} className="text-slate-200 group-hover:text-blue-900 transition-all" />
-                      </div>
-                      <h5 className="font-black text-blue-950 uppercase text-xl leading-tight mb-4">{e.title}</h5>
-                      <div className="flex flex-wrap gap-4 text-[9px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-4">
-                        <span className="flex items-center gap-1"><Clock size={12}/> {e.time}</span>
-                        <span className="flex items-center gap-1"><MapPin size={12}/> {e.location}</span>
-                      </div>
-                   </div>
-                ))}
-              </div>
-            )}
+          
+          <div className="min-h-[600px] bg-slate-100 relative">
+            <AnimatePresence mode="wait">
+              {displayMode === 'grid' && (
+                <motion.div key="grid" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  {renderMonthView()}
+                </motion.div>
+              )}
+              {displayMode === 'week' && (
+                <motion.div key="week" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  {renderWeekView()}
+                </motion.div>
+              )}
+              {displayMode === 'year' && (
+                <motion.div key="year" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  {renderYearView()}
+                </motion.div>
+              )}
+              {displayMode === 'list' && (
+                <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-10 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {events.filter(e => isSameMonth(e.start, currentDate)).map(e => (
+                    <div key={e.id} className="p-8 bg-white rounded-[2.5rem] border-2 border-blue-50 hover:border-[#facc15] transition-all cursor-pointer shadow-sm group" onClick={() => setSelectedDayEvents({ date: e.start, events: [e] })}>
+                        <div className="flex justify-between items-start mb-4">
+                          <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${isPatronDay(e.start) ? 'bg-yellow-600 text-white' : e.type === 'efemeride' ? 'bg-violet-900 text-white' : 'bg-blue-900 text-[#facc15]'}`}>
+                            {format(e.start, 'dd MMMM', { locale: es })}
+                          </span>
+                          <ArrowUpRight size={20} className="text-slate-200 group-hover:text-blue-900 transition-all" />
+                        </div>
+                        <h5 className="font-black text-blue-950 uppercase text-xl leading-tight mb-4">{e.title}</h5>
+                        <div className="flex flex-wrap gap-4 text-[9px] font-black text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-4">
+                          <span className="flex items-center gap-1"><Clock size={12}/> {e.time}</span>
+                          <span className="flex items-center gap-1"><MapPin size={12}/> {e.location}</span>
+                        </div>
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </section>
       </main>
@@ -532,7 +898,7 @@ export default function App() {
                   <button onClick={() => setSelectedDayEvents(null)} className="bg-white/20 p-4 rounded-full hover:bg-white/30 transition-all"><X size={32}/></button>
                 </div>
                 <div className="p-10 space-y-8 max-h-[60vh] overflow-y-auto custom-scroll bg-slate-50">
-                  {selectedDayEvents.events.map(e => (
+                  {selectedDayEvents.events.length > 0 ? selectedDayEvents.events.map(e => (
                     <div key={e.id} className={`p-8 rounded-[3rem] shadow-xl border-2 bg-white space-y-6 relative overflow-hidden ${isPatronDay(e.start) ? 'border-yellow-400' : isAcademicBoundary(e.start) ? 'border-emerald-500' : e.type === 'efemeride' ? 'border-violet-500' : 'border-white'}`}>
                       {isPatronDay(e.start) && <div className="absolute -top-6 -right-6 text-yellow-100/50 rotate-12"><Sparkles size={120} /></div>}
                       <div className="flex items-start gap-4">
@@ -564,24 +930,24 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="space-y-2 pt-6 border-t border-slate-100">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Users size={12}/> PARTICIPANTES</span>
-                        <p className="text-[11px] font-bold text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">{e.participants || 'Comunidad Educativa'}</p>
-                      </div>
-
                       <div className="space-y-2 pt-4">
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Info size={12}/> OBSERVACIONES</span>
                         <p className={`text-[11px] font-medium italic leading-relaxed p-4 rounded-2xl border ${isPatronDay(e.start) ? 'bg-yellow-50 border-yellow-100 text-yellow-800' : 'bg-blue-50/30 border-blue-50 text-slate-600'}`}>"{e.observations || 'Sin observaciones'}"</p>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="text-center py-20 opacity-20 flex flex-col items-center gap-4">
+                      <CalendarSearch size={64} />
+                      <p className="font-black uppercase tracking-widest">No hay actividades para este día</p>
+                    </div>
+                  )}
                 </div>
              </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      <footer className="bg-blue-900 text-white py-16 text-center text-xs border-t-4 border-[#facc15]">
+      <footer className="bg-blue-900 text-white py-16 text-center text-xs border-t-4 border-[#facc15] no-print">
         <div className="max-w-4xl mx-auto px-6 space-y-4">
           <p className="font-black uppercase tracking-widest text-2xl mb-4 leading-tight">Institución Educativa Nuestra Señora de la Candelaria</p>
           <div className="flex flex-wrap justify-center gap-6 text-slate-300 font-bold uppercase tracking-widest">
@@ -593,7 +959,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* PANEL DE GESTIÓN (ADMIN) */}
+      {/* ADMIN Panel */}
       <AnimatePresence>
         {isAdminModalOpen && (
           <div className="fixed inset-0 bg-blue-950/80 backdrop-blur-2xl z-[300] flex items-center justify-center p-4">
@@ -602,10 +968,6 @@ export default function App() {
                 <Lock size={64} className="text-blue-900 mb-8 mx-auto" />
                 <h3 className="text-3xl font-black text-blue-950 uppercase mb-8 tracking-tighter">Acceso Directivo</h3>
                 <form onSubmit={handleLogin} className="space-y-6">
-                  <div className="text-left space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Usuario Institucional</label>
-                    <input type="email" defaultValue="administrador@iensecan.edu.co" disabled className="w-full px-8 py-5 bg-slate-50 rounded-2xl font-bold text-slate-400 border border-slate-100 cursor-not-allowed" />
-                  </div>
                   <div className="text-left space-y-1">
                     <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Contraseña de Acceso</label>
                     <input 
@@ -626,7 +988,6 @@ export default function App() {
                 <div className="bg-blue-900 p-10 text-white flex justify-between items-center no-print">
                   <div>
                     <h3 className="text-3xl font-black uppercase tracking-widest flex items-center gap-4">Gestión Académica 2026</h3>
-                    <p className="text-[10px] font-bold opacity-50 uppercase mt-2 tracking-widest">Configuración de Reuniones y Actividades Oficiales</p>
                   </div>
                   <div className="flex gap-4">
                     {!isAddingNew && <button onClick={() => setIsAddingNew(true)} className="bg-[#facc15] text-blue-900 px-8 py-4 rounded-2xl font-black text-xs uppercase flex items-center gap-3 shadow-xl hover:scale-105 transition-all"><PlusCircle size={20}/> NUEVA ACTIVIDAD</button>}
@@ -637,10 +998,6 @@ export default function App() {
                 <div className="flex-grow overflow-y-auto p-12 bg-slate-50 custom-scroll">
                   {isAddingNew ? (
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[3.5rem] p-12 shadow-2xl border-4 border-blue-50 max-w-4xl mx-auto">
-                        <div className="flex items-center gap-4 mb-10 pb-6 border-b border-slate-100">
-                            <Edit3 className="text-blue-900" size={32} />
-                            <h4 className="text-2xl font-black uppercase text-blue-950">Formulario de Actividades (7 Ítems)</h4>
-                        </div>
                         <form onSubmit={handleSaveEvent} className="space-y-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-2 col-span-2">
@@ -661,24 +1018,20 @@ export default function App() {
                                     <input type="date" value={formData.start} onChange={e => handleDateChange(e.target.value)} required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none" />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-4">DIA (CALCULADO)</label>
-                                    <input value={formData.day} readOnly className="w-full px-8 py-5 bg-slate-200 rounded-3xl font-black text-blue-400 outline-none uppercase cursor-not-allowed" />
-                                </div>
-                                <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase text-slate-400 ml-4">HORA</label>
                                     <input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none" />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase text-slate-400 ml-4">LUGAR</label>
-                                    <input value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="Ej: Auditorio Sede Nelson Muñoz" required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none uppercase" />
+                                    <input value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none uppercase" />
                                 </div>
                                 <div className="space-y-2 col-span-2">
                                     <label className="text-[10px] font-black uppercase text-slate-400 ml-4">PARTICIPANTES</label>
-                                    <input value={formData.participants} onChange={e => setFormData({...formData, participants: e.target.value})} placeholder="Ej: Docentes, Directivos y Padres de Familia" required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none uppercase" />
+                                    <input value={formData.participants} onChange={e => setFormData({...formData, participants: e.target.value})} required className="w-full px-8 py-5 bg-slate-100 rounded-3xl font-black text-blue-900 outline-none uppercase" />
                                 </div>
                                 <div className="space-y-2 col-span-2">
                                     <label className="text-[10px] font-black uppercase text-slate-400 ml-4">OBSERVACIONES</label>
-                                    <textarea value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} placeholder="Detalles, requisitos, material a traer..." className="w-full px-8 py-6 bg-slate-100 rounded-[2.5rem] font-medium text-slate-700 outline-none min-h-[150px]" />
+                                    <textarea value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} className="w-full px-8 py-6 bg-slate-100 rounded-[2.5rem] font-medium text-slate-700 outline-none min-h-[150px]" />
                                 </div>
                             </div>
                             <div className="flex gap-6 pt-10 border-t border-slate-100">
@@ -700,11 +1053,6 @@ export default function App() {
                                         </div>
                                         <div>
                                             <h6 className="text-xl font-black text-blue-950 uppercase leading-tight group-hover:text-blue-600 transition-colors">{ev.title}</h6>
-                                            <div className="flex flex-wrap gap-4 mt-3 text-[9px] font-black uppercase text-slate-400 tracking-widest">
-                                                <span className="flex items-center gap-1"><Clock size={12}/> {ev.time}</span>
-                                                <span className="flex items-center gap-1"><MapPin size={12}/> {ev.location}</span>
-                                                <span className={`flex items-center gap-1 ${ev.type === 'efemeride' ? 'text-violet-500' : isPatronDay(ev.start) ? 'text-yellow-600' : ''}`}><Users size={12}/> {ev.type === 'efemeride' ? 'Comunidad Global' : isPatronDay(ev.start) ? 'Todo Candelaria' : ev.participants?.split(',')[0]}...</span>
-                                            </div>
                                         </div>
                                     </div>
                                     <div className="flex gap-4">
